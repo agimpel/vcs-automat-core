@@ -1,12 +1,3 @@
-# List of all identity provides as used in worker
-from .database import DB_ID
-from .vcs import VCS_ID
-ID_PROVIDERS = (DB_ID, VCS_ID)
-
-
-
-
-
 # Base interface for identity providers.
 # To be used by any connector to an identity provider.
 # Attributes:
@@ -22,7 +13,7 @@ class IdProvider(object):
 
     @property
     def orgname(self):
-        raise NotImplementedError("Attribute 'orgname' must be set by class '%s'" % self.__class__.__name__))
+        raise NotImplementedError("Attribute 'orgname' must be set by class '%s'" % self.__class__.__name__)
 
 
     # Authenticates the given legi number if possible.
@@ -41,7 +32,7 @@ class IdProvider(object):
     # Returns:
     #     True if reporting was successful, False otherwise.
     def report(self, user, slot):
-        raise NotImplementedError("Method 'report' must be implemented by class '%s'" % self.__class__.__name__))
+        raise NotImplementedError("Method 'report' must be implemented by class '%s'" % self.__class__.__name__)
 
 
 
@@ -69,3 +60,10 @@ class User(object):
         self.credits = credits
         self.nethz = nethz
         self.name = name
+
+
+
+# List of all identity provides as used in worker
+from .database import DB_ID
+from .vcs import VCS_ID
+ID_PROVIDERS = (DB_ID, VCS_ID)
