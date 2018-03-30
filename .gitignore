@@ -1,6 +1,11 @@
 # sensitive config data
 database/*.db
-config/config
+config/*
+!config/*_default
+0_src/*
+0_src/
+1_old/*
+1_old/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
