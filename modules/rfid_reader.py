@@ -1,13 +1,12 @@
-import serial
-import time
 from threading import Thread
 import logging
 import queue
 import binascii
 
+import Adafruit_PN532 as PN532
+
 
 class RFID_Reader(Thread):
-
 
     # name
     # INFO:
@@ -21,11 +20,19 @@ class RFID_Reader(Thread):
         self.logger.setLevel(self.loglevel)
 
         Thread.__init__(self, daemon=True)
-        self.serial = serial.Serial('port', 38400, timeout=1)
-        self.data = queue.Queue()
+        self.rfid_queue = queue.Queue()
         self.is_running = False
 
-
+        # configuration of Adafruit PN532 for RaspberryPi
+        CS = 18
+        MOSI = 23
+        MISO = 24
+        SCLK = 25
+        self.pn532 = PN532.PN532(cs=CS, sclk=SCLK, mosi=MOSI, miso=MISO)
+        self.pn532.begin()
+        ic, ver, rev, support = self.pn532.get_firmware_version()
+        self.logger.info('Found Adafruit PN532 with firmware version: {0}.{1}'.format(ver, rev))
+        self.pn532.SAM_configuration()
 
     # name
     # INFO:
@@ -35,14 +42,31 @@ class RFID_Reader(Thread):
         self.is_running = True
 
         while self.is_running:
-            self.poll()
-            data = self.serial.read(14)
-            if data and len(data) == 14:
-                self.data.put(binascii.hexlify(data[10:13]).decode('ascii'))
+            uid = self.pn532.read_passive_target()
 
-        self.__del__()
+            # break 1: check if rfid detected
+            if uid is None:
+                self.logger.debug('no rfid detected')
+                continue
+            self.logger.debug('card with UID {} found'.format(binascii.hexlify(uid)))
 
+            # break 2: try to authenticate block for reading with default key (0xFFFFFFFFFFFF)
+            if not self.pn532.mifare_classic_authenticate_block(uid, 4, self.PN532.MIFARE_CMD_AUTH_B, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]):
+                self.logger.error('failed to authenticate')
+                continue
+            self.logger.debug('card successfully authenticated')
 
+            # read block data
+            data = self.pn532.mifare_classic_read_block(4)
+
+            # break 3: check if data is valid
+            if data is None:
+                self.logger.error('failed to read block')
+                continue
+            self.logger.debug('block read as {}'.format(binascii.hexlify(data[:4])))
+
+            # push valid uid to rfid queue
+            self.rfid_queue.put(binascii.hexlify(data).decode('ascii'))
 
     # name
     # INFO:
@@ -51,28 +75,6 @@ class RFID_Reader(Thread):
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
-
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
-    def __del__(self):
-        if self.serial.isOpen():
-            self.serial.close()
-
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
-    def poll(self):
-        return True
-
-
-
 
 
 # name

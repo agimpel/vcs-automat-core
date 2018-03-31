@@ -1,10 +1,10 @@
 import logging
 from connectors import User, IdProvider
 
+
 class DB_ID(IdProvider):
 
     orgname = "DB"
-
 
     # name
     # INFO:
@@ -17,8 +17,6 @@ class DB_ID(IdProvider):
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
 
-
-
     # name
     # INFO:
     # ARGS:
@@ -30,12 +28,10 @@ class DB_ID(IdProvider):
             self.log.exception("auth exception: " + e)
             return False
 
-
-
     # name
     # INFO:
     # ARGS:
-    # RETURNS:  
+    # RETURNS:
     def report(self, rfid, slot):
         try:
             return True

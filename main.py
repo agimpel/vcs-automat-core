@@ -16,9 +16,6 @@ CFG = os.path.join(PATH, "/config/")
 DB = os.path.join(PATH, "/database/")
 
 
-
-
-
 class main(Thread):
 
     # __init__
@@ -28,9 +25,13 @@ class main(Thread):
     def __init__(self):
 
         # set-up of general logging
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s', datefmt='%Y-%m-%d %I:%M:%S')
+        logging.basicConfig(level=logging.DEBUG,
+                            format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s',
+                            datefmt='%Y-%m-%d %I:%M:%S',
+                            handlers=[logging.FileHandler(PATH + "/main.log"), logging.StreamHandler()])
 
         # start services
+        logging.info('starting threads')
         self.tbot = Telegram_Bot()
         self.tbot.start()
         self.rfid = RFID_Reader()
@@ -46,15 +47,13 @@ class main(Thread):
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
 
-
-
     # run
     # INFO:     scan all threads for operation and provide Exception for stopping all threads
     # ARGS:     /
     # RETURNS:  /
     def run(self):
 
-        try: # try-block for KeyboardInterrupt
+        try:  # try-block for KeyboardInterrupt
             while True:
 
                 if not self.tbot.isAlive():
@@ -74,27 +73,30 @@ class main(Thread):
 
                 time.sleep(0.5)
 
-        except KeyboardInterrupt: # on CTRL-C, stop all threads and shut down
+        except KeyboardInterrupt:  # on CTRL-C, stop all threads and shut down
             self.stop('KeyboardInterrupt')
-
 
     # stop
     # INFO:     stop all threads and join them, log reason for shutdown
     # ARGS:     reason (str) -> title for the shutdown reason
     # RETURNS:  /
-    def stop(self, reason = 'undefined'):
+    def stop(self, reason='undefined'):
 
         self.logger.error("SHUTDOWN INITIALISED BY " + reason)
 
         # stop all threads manually and wait for threads to finish
         self.work.exit()
-        if self.work.isAlive(): self.work.join(5.0)
+        if self.work.isAlive():
+            self.work.join(5.0)
         self.mdbh.exit()
-        if self.mdbh.isAlive(): self.mdbh.join(5.0)
+        if self.mdbh.isAlive():
+            self.mdbh.join(5.0)
         self.rfid.exit()
-        if self.rfid.isAlive(): self.rfid.join(5.0)
+        if self.rfid.isAlive():
+            self.rfid.join(5.0)
         self.tbot.exit()
-        if self.tbot.isAlive(): self.tbot.join(5.0)
+        if self.tbot.isAlive():
+            self.tbot.join(5.0)
 
         # end the cript gracefully
         self.logger.info("SHUTDOWN FINALISED")

@@ -6,6 +6,7 @@ config/*
 0_src/
 1_old/*
 1_old/
+main.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

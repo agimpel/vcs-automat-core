@@ -1,5 +1,4 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import sys
+from telegram.ext import Updater, CommandHandler
 import os.path
 import logging
 import time
@@ -10,7 +9,6 @@ import configparser
 
 
 from modules import CFG, DB
-
 
 
 class Telegram_Bot(Thread):
@@ -34,9 +32,6 @@ class Telegram_Bot(Thread):
 
         Thread.__init__(self, daemon=True)
         self.is_running = False
-
-
-
 
     # name
     # INFO:
@@ -66,14 +61,8 @@ class Telegram_Bot(Thread):
         # start telegram bot
         self.tbot_up.start_polling()
 
-
-
         while self.is_running:
             time.sleep(0.2)
-
-
-
-
 
     # name
     # INFO:
@@ -82,7 +71,6 @@ class Telegram_Bot(Thread):
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
-
 
     # name
     # INFO:
@@ -165,8 +153,8 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def on_start(self, bot, update):
-        name = get_name(update)
-        help_text = get_helptext(update)
+        name = self.get_name(update)
+        help_text = self.get_helptext(update)
         update.message.reply_text('Hallo {}!\nIch bin ein Bot für den VCS-Bierautomaten. Bei Fragen & Feedback wende dich an bierko@vcs.ethz.ch.\n{}'.format(name, help_text))
 
     # name
@@ -188,11 +176,11 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def report(self, bot, update, args):
-        if not update.message.from_user.id in self.blacklist_user_id:
+        if update.message.from_user.id not in self.blacklist_user_id:
             update.message.reply_text('Deine Meldung wurde übermittelt!')
             name = self.get_name(update)
 
-            bot.send_message(chat_id=admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}'.format(name, update.effective_user.id, update.message.date, ' '.join(args)), disable_notification=True)
+            bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}'.format(name, update.effective_user.id, update.message.date, ' '.join(args)), disable_notification=True)
         else:
             update.message.reply_text('Du darfst keine Meldungen mehr einreichen.\nHälst du das für einen Fehler, melde dich bei bierko@vcs.ethz.ch')
 
@@ -202,7 +190,6 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def help(self, bot, update):
         update.message.reply_text(self.get_helptext(update))
-
 
     # name
     # INFO:
@@ -219,7 +206,6 @@ class Telegram_Bot(Thread):
     def change_fillstatus(self, bot, update, args):
         update.message.reply_text('To be implemented!')
 
-
     # name
     # INFO:
     # ARGS:
@@ -229,10 +215,9 @@ class Telegram_Bot(Thread):
         update.message.reply_text('User ID {} wurde geblockt!'.format(args))
 
 
-
 # name
 # INFO:
-# ARGS:     
+# ARGS:
 # RETURNS:
 if __name__ == "__main__":
     print('Hi')

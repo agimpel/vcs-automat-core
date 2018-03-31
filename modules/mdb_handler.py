@@ -38,7 +38,6 @@ class MDB_Handler(Thread):
     MDB_VEND_DENIED = b'\x06'
     MDB_VEND_APPROVED = b'\x05\x00\x02'
 
-
     # name
     # INFO:
     # ARGS:
@@ -61,7 +60,6 @@ class MDB_Handler(Thread):
         self.beer_available_callback = None
         self.last_amount = 0
 
-
     # name
     # INFO:
     # ARGS:
@@ -69,7 +67,6 @@ class MDB_Handler(Thread):
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
-
 
     # name
     # INFO:
@@ -86,7 +83,6 @@ class MDB_Handler(Thread):
 
         self._del__()
 
-
     # name
     # INFO:
     # ARGS:
@@ -94,14 +90,12 @@ class MDB_Handler(Thread):
     def set_ack_dispensed_callback(self, function):
         self.dispensed_callback = function
 
-
     # name
     # INFO:
     # ARGS:
     # RETURNS:
     def set_beer_is_available_callback(self, function):
         self.beer_available_callback = function
-
 
     # name
     # INFO:
@@ -125,14 +119,12 @@ class MDB_Handler(Thread):
             return data
         return None
 
-
     # name
     # INFO:
     # ARGS:
     # RETURNS:
     def send_data(self, data):
         self.ser.write(b'\x02\x00' + data + b'\x10\x03')
-
 
     # name
     # INFO:
@@ -289,8 +281,6 @@ class MDB_Handler(Thread):
                 self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
                 self.logger.warning("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
-
-
 
     # name
     # INFO:
