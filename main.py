@@ -7,7 +7,7 @@ from threading import Thread
 
 from modules.rfid_reader import RFID_Reader
 from modules.telegram_bot import Telegram_Bot
-from modules.mdb_handler import MDB_Handler
+from modules.mdb_handler_dummy import MDB_Handler
 from worker import Worker
 
 # general settings
@@ -29,6 +29,9 @@ class main(Thread):
                             format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s',
                             datefmt='%Y-%m-%d %I:%M:%S',
                             handlers=[logging.FileHandler(PATH + "/main.log"), logging.StreamHandler()])
+
+        # setting of global minimum logging level
+        logging.disable(logging.DEBUG)
 
         # start services
         logging.info('starting threads')

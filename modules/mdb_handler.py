@@ -43,7 +43,6 @@ class MDB_Handler(Thread):
     # ARGS:
     # RETURNS:
     def __init__(self):
-
         # set-up for logging of mdbh. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
         self.loglevel = logging.DEBUG
         self.logtitle = 'mdbh'
@@ -57,7 +56,7 @@ class MDB_Handler(Thread):
         self.open_session = False
         self.state = "RESET"
         self.dispensed_callback = None
-        self.beer_available_callback = None
+        self.available_callback = None
         self.last_amount = 0
 
     # name
@@ -81,21 +80,21 @@ class MDB_Handler(Thread):
             if frame is not None:
                 self.handle_data(frame)
 
-        self._del__()
+        self.__del__()
 
     # name
     # INFO:
     # ARGS:
     # RETURNS:
-    def set_ack_dispensed_callback(self, function):
+    def set_dispensed_callback(self, function):
         self.dispensed_callback = function
 
     # name
     # INFO:
     # ARGS:
     # RETURNS:
-    def set_beer_is_available_callback(self, function):
-        self.beer_available_callback = function
+    def set_available_callback(self, function):
+        self.available_callback = function
 
     # name
     # INFO:
@@ -179,7 +178,7 @@ class MDB_Handler(Thread):
                     self.send_data(self.MDB_OPEN_SESSION)
                     self.state = "DISPLAY SESSION"
                     self.open_session = False
-                    self.last_amount = self.beer_available_callback(0)
+                    self.last_amount = self.available_callback(0)
                 else:
                     self.send_data(self.MDB_ACK)
 
@@ -206,10 +205,10 @@ class MDB_Handler(Thread):
             elif data[0:2] == self.MDB_VEND_REQUEST:
                 self.logger.info("MDB: [IN] Vend Request")
                 self.slot = struct.unpack('>H', data[4:6])[0]
-                self.last_amount = self.beer_available_callback(self.slot)
+                self.last_amount = self.available_callback(self.slot)
                 self.logger.info('self last amount %d', self.last_amount)
                 if self.last_amount:
-                    self.logger.info("MDB: [LOGIC] Request Approved, " + str(self.last_amount - 1) + " Beers left")
+                    self.logger.info("MDB: [LOGIC] Request Approved, " + str(self.last_amount - 1) + " credits left")
                     self.send_data(self.MDB_VEND_APPROVED)
                 else:
                     self.logger.info("MDB: [LOGIC] Request Denied")

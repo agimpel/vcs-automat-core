@@ -2,8 +2,9 @@ from threading import Thread
 import logging
 import queue
 import binascii
+import time
 
-import Adafruit_PN532 as PN532
+import modules.PN532 as PN532
 
 
 class RFID_Reader(Thread):
@@ -24,49 +25,37 @@ class RFID_Reader(Thread):
         self.is_running = False
 
         # configuration of Adafruit PN532 for RaspberryPi
-        CS = 18
-        MOSI = 23
-        MISO = 24
-        SCLK = 25
-        self.pn532 = PN532.PN532(cs=CS, sclk=SCLK, mosi=MOSI, miso=MISO)
+        self.pn532 = PN532.PN532("/dev/ttyS0")
         self.pn532.begin()
         ic, ver, rev, support = self.pn532.get_firmware_version()
-        self.logger.info('Found Adafruit PN532 with firmware version: {0}.{1}'.format(ver, rev))
+        self.logger.info('Found Adafruit PN532 with firmware version: {}.{}'.format(ver, rev))
         self.pn532.SAM_configuration()
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # run
+    # INFO:     checks RFID reader for RFID tags, and if one is found, queues the corresponding UID for the worker
+    # ARGS:     /
+    # RETURNS:  /
     def run(self):
         self.is_running = True
 
         while self.is_running:
-            uid = self.pn532.read_passive_target()
+            try:
+                uid = self.pn532.read_passive_target()
 
-            # break 1: check if rfid detected
-            if uid is None:
-                self.logger.debug('no rfid detected')
+                # break 1: check if rfid detected
+                if uid is None:
+                    self.logger.debug('no rfid detected')
+                    continue
+                self.logger.debug('card with UID {} found'.format(binascii.hexlify(uid).decode('ascii')))
+
+                # push uid to rfid queue
+                self.rfid_queue.put(binascii.hexlify(uid).decode('ascii'))
+
+                time.sleep(5)
+
+            except Exception as e:
+                self.logger.exception("exception: {}".format(e))
                 continue
-            self.logger.debug('card with UID {} found'.format(binascii.hexlify(uid)))
-
-            # break 2: try to authenticate block for reading with default key (0xFFFFFFFFFFFF)
-            if not self.pn532.mifare_classic_authenticate_block(uid, 4, self.PN532.MIFARE_CMD_AUTH_B, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]):
-                self.logger.error('failed to authenticate')
-                continue
-            self.logger.debug('card successfully authenticated')
-
-            # read block data
-            data = self.pn532.mifare_classic_read_block(4)
-
-            # break 3: check if data is valid
-            if data is None:
-                self.logger.error('failed to read block')
-                continue
-            self.logger.debug('block read as {}'.format(binascii.hexlify(data[:4])))
-
-            # push valid uid to rfid queue
-            self.rfid_queue.put(binascii.hexlify(data).decode('ascii'))
 
     # name
     # INFO:
@@ -82,4 +71,17 @@ class RFID_Reader(Thread):
 # ARGS:
 # RETURNS:
 if __name__ == "__main__":
-    print('Hi')
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s',
+                        datefmt='%Y-%m-%d %I:%M:%S')
+    rfid = RFID_Reader()
+    rfid.start()
+
+    try:  # try-block for KeyboardInterrupt
+        while True:
+            time.sleep(0.5)
+
+    except KeyboardInterrupt:  # on CTRL-C, stop all threads and shut down
+        rfid.exit()
+        if rfid.isAlive():
+            rfid.join(5.0)

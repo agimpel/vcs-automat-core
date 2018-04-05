@@ -37,8 +37,8 @@ class Worker(Thread):
         self.current_credits = 0
         self.current_user = User()
         self.current_org = 'undefined'
-        self.mdbh.set_ack_dispensed_callback(self.ack_dispensed_beer)
-        self.mdbh.set_beer_is_available_callback(self.beer_is_available)
+        self.mdbh.set_dispensed_callback(self.queue_vending)
+        self.mdbh.set_available_callback(self.credits_available)
 
         # initialize ID providers
         self.providers = {}
@@ -69,16 +69,16 @@ class Worker(Thread):
                     continue
 
             # second queue: RFID reader
-            elif not self.rfid.rfid_queue.empty():
+            if not self.rfid.rfid_queue.empty():
                 self.logger.debug('rfid queue non-empty, processing queue')
                 try:
                     self.current_uid = self.rfid.rfid_queue.get()
                     # look up the rfid as id: False if unknown, array of (credits, user, org) if rfid is known. If rfid is known, enable vending
                     id = self.uid_lookup(self.current_uid)
                     if id is not False:
-                        self.logger.debug("rfid {} was found in {} for user {} with {} credits".format(self.current_uid, self.current_org, self.current_user.name, self.current_credits))
                         (self.current_credits, self.current_user, self.current_org) = id
                         self.mdbh.open_session = True
+                        self.logger.debug("rfid {} was found in {} for user {} with {} credits".format(self.current_uid, self.current_org, self.current_user.name, self.current_credits))
                     else:
                         self.logger.error("rfid {} was unknown, dismissing".format(self.current_uid))
                         (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
@@ -103,7 +103,7 @@ class Worker(Thread):
     # INFO:
     # ARGS:
     # RETURNS:
-    def beer_is_available(self, slot_id):
+    def credits_available(self, slot_id):
         if self.current_credits > 0:
             return self.current_credits
         return 0
@@ -112,11 +112,11 @@ class Worker(Thread):
     # INFO:
     # ARGS:
     # RETURNS:
-    def ack_dispensed_beer(self, slot):
+    def queue_vending(self, slot_id):
         self.current_credits -= 1
-        self.dispensed_beer.put((slot, self.current_uid, self.org))
+        self.vending_queue.put((slot_id, self.current_uid, self.current_org))
         if self.current_credits > 0:
-            self.mdb.open_session = True
+            self.mdbh.open_session = True
 
     # uid_lookup
     # INFO:     looks up 'rfid' from RFID reader in all identification providers and returns info on user, available credits and the authenticating organisation
@@ -125,13 +125,14 @@ class Worker(Thread):
     # ARGS:     rfid (int) -> RFID to be identified as read by RFID reader
     # RETURNS:  Array (int credits, User user, str org) with relevant info on the user if rfid is known, False otherwise
     def uid_lookup(self, rfid):
+        self.logger.debug("looking up UID {}".format(rfid))
         credits = 0
         user = None
         org = None
         best_result = (credits, user, org)
 
         # if there already is a vending in progress, dismiss
-        if not self.dispensed_beer.empty():
+        if not self.vending_queue.empty():
             self.logger.error('vending still in progress, dismissing rfid authentication')
             return False
 
@@ -142,6 +143,7 @@ class Worker(Thread):
             if user is not None:
                 org = id_provider.orgname
                 credits = user.credits
+                self.logger.info('rfid %s matched from %s with %d credits', rfid, org, credits)
                 if best_result[0] < credits:
                     best_result = (credits, user, org)
 
@@ -150,7 +152,7 @@ class Worker(Thread):
             self.logger.error('rfid %s had no match', user.rfid)
             return False
         else:
-            self.logger.info('rfid %s matched from %s with %d credits', user.rfid, org, credits)
+            self.logger.info('rfid %s matched from %s with %d credits as best result', best_result[1].rfid, best_result[2], best_result[0])
             return best_result
 
 
