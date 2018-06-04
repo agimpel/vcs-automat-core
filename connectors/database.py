@@ -25,7 +25,7 @@ class DB_ID(IdProvider):
         try:
             return User(rfid=rfid, credits=10, nethz='default', name='Max Muster')
         except Exception as e:
-            self.log.exception("auth exception: " + e)
+            self.logger.exception("auth exception: " + e)
             return False
 
     # name
@@ -36,5 +36,5 @@ class DB_ID(IdProvider):
         try:
             return True
         except Exception as e:
-            self.log.exception("report exception: " + e)
+            self.logger.exception("report exception: " + e)
             return False
