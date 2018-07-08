@@ -47,9 +47,8 @@ class User(object):
     #     credits: The credits the user has (int).
     #     nethz: The user's nethzidentification string (str).
     #     name: The user's name (str).
-    def __init__(self, rfid=None, credits=None, nethz=None, name='Student/in'):
+    def __init__(self, rfid=None, credits=None, uid=None):
 
         self.rfid = rfid
         self.credits = credits
-        self.nethz = nethz
-        self.name = name
+        self.uid = uid

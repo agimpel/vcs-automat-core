@@ -23,7 +23,7 @@ class DB_ID(IdProvider):
     # RETURNS:
     def auth(self, rfid):
         try:
-            return User(rfid=rfid, credits=10, nethz='default', name='Max Muster')
+            return User(rfid=rfid, credits=10, uid='default')
         except Exception as e:
             self.logger.exception("auth exception: " + e)
             return False

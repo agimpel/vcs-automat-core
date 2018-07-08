@@ -125,7 +125,7 @@ class Worker(Thread):
     # ARGS:     rfid (int) -> RFID to be identified as read by RFID reader
     # RETURNS:  Array (int credits, User user, str org) with relevant info on the user if rfid is known, False otherwise
     def uid_lookup(self, rfid):
-        self.logger.debug("looking up UID {}".format(rfid))
+        self.logger.debug("looking up RFID {}".format(rfid))
         credits = 0
         user = None
         org = None
