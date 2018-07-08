@@ -56,7 +56,7 @@ class VCS_ID(IdProvider):
         try:
             response = self.send_post_request({"rfid":rfid, "slot":slot}, self.report_url)
             if response is False:
-                self.logger.critical("CRITICAL: Reporting was unsuccessful of rfid " + rfid + " and slot " + slot)
+                self.logger.critical("CRITICAL: Reporting was unsuccessful of rfid " + str(rfid) + " and slot " + str(slot))
                 return False
             else:
                 self.logger.info("RFID was known and successfully reported")

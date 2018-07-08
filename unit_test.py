@@ -42,7 +42,7 @@ logger.setLevel(loglevel)
 
 
 conn = VCS_ID()
-print(conn.report('123456',3))
+print(vars(conn.auth('000000')))
 
 
 
