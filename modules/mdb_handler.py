@@ -52,7 +52,7 @@ class MDB_Handler(Thread):
         Thread.__init__(self, daemon=True)
         self.is_running = False
 
-        self.ser = serial.Serial('port', 115200, timeout=0.1)
+        self.ser = serial.Serial('/dev/ttyS0', 115200, timeout=0.1) # find port with 'python -m serial.tools.list_ports'
         self.open_session = False
         self.state = "RESET"
         self.dispensed_callback = None
