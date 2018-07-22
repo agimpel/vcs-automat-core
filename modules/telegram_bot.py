@@ -1,4 +1,5 @@
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Updater, CommandHandler, ConversationHandler, MessageHandler, RegexHandler, Filters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 import os.path
 import logging
 import time
@@ -33,6 +34,7 @@ class Telegram_Bot(Thread):
         Thread.__init__(self, daemon=True)
         self.is_running = False
 
+
     # name
     # INFO:
     # ARGS:
@@ -44,25 +46,45 @@ class Telegram_Bot(Thread):
         self.tbot_dp = self.tbot_up.dispatcher
         self.tbot_jq = self.tbot_up.job_queue
 
+
+        # conversation handlers
+        report_handler = ConversationHandler(
+            entry_points = [RegexHandler('(Problem melden)', self.report_entry)],
+            states = {
+                1: [MessageHandler(Filters.text, self.report_text)],
+            },
+            fallbacks = [CommandHandler('cancel', self.report_cancel)]
+        )
+        self.tbot_dp.add_handler(report_handler)
+
+        credits_handler = ConversationHandler(
+            entry_points = [RegexHandler('(Guthaben überprüfen)', self.credits_entry)],
+            states = {
+                1: [MessageHandler(Filters.text, self.credits_text)],
+            },
+            fallbacks = [CommandHandler('cancel', self.credits_cancel)]
+        )
+        self.tbot_dp.add_handler(credits_handler)
+
+
         # general commands
         self.tbot_dp.add_handler(CommandHandler("start", self.on_start))
-        self.tbot_dp.add_handler(CommandHandler("report", self.report, pass_args=True))
-        self.tbot_dp.add_handler(CommandHandler("help", self.help))
-        self.tbot_dp.add_handler(CommandHandler("status", self.check_fill_status))
-        self.tbot_dp.add_handler(CommandHandler("puls", self.check_responsiveness))
+        self.tbot_dp.add_handler(RegexHandler("(Hilfe)", self.help))
+        self.tbot_dp.add_handler(RegexHandler("(Füllstand überprüfen)", self.check_fill_status))
 
         # admin only commands
         self.tbot_dp.add_handler(CommandHandler("ban", self.ban_userid, pass_args=True))
         self.tbot_dp.add_handler(CommandHandler("fillstatus", self.change_fillstatus, pass_args=True))
 
-        # log all errors0
+        # log all errors
         self.tbot_dp.add_error_handler(self.error)
 
         # start telegram bot
         self.tbot_up.start_polling()
 
         while self.is_running:
-            time.sleep(0.2)
+            time.sleep(0.05)
+
 
     # name
     # INFO:
@@ -71,6 +93,7 @@ class Telegram_Bot(Thread):
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
+
 
     # name
     # INFO:
@@ -81,6 +104,8 @@ class Telegram_Bot(Thread):
         config.read(cfg_path)
         self.telegram_api_key = str(config['telegram']['api_key'])
         self.admin_group_id = int(config['telegram']['admin_group_id'])
+        self.logger.info('api key and admin group id loaded')
+
 
     # name
     # INFO:
@@ -97,6 +122,8 @@ class Telegram_Bot(Thread):
         self.blacklist_user_id = [item[0] for item in db.fetchall()]
 
         db_connector.close()
+        self.logger.info('admin user ids and blacklist loaded')
+
 
     # name
     # INFO:
@@ -112,6 +139,23 @@ class Telegram_Bot(Thread):
             return func(self, bot, update, *args, **kwargs)
         return wrapped
 
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def default_keyboard(self):
+        keyboard = [['Allgemeine Informationen anzeigen'],['Guthaben überprüfen', 'Füllstand überprüfen'], ['Problem melden', 'Hilfe']]
+        return ReplyKeyboardMarkup(keyboard)
+
+
+    def default_state(self, bot, update):
+        update.message.reply_text('Was kann ich für dich tun?', reply_markup = self.default_keyboard())
+
+
+
+
+
     # name
     # INFO:
     # ARGS:
@@ -121,7 +165,8 @@ class Telegram_Bot(Thread):
         if update.message.from_user.first_name:
             name += update.message.from_user.first_name
         if update.message.from_user.last_name:
-            name += ' '
+            if name is not '':
+                name += ' '
             name += update.message.from_user.last_name
         return name
 
@@ -131,10 +176,9 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def get_helptext(self, update):
         output = 'Hier ist was ich kann:\n'
-        output += '\n/help Zeigt die Befehle'
-        output += '\n/status Gibt den Füllstand des Automaten'
-        output += '\n/puls Überprüft Bot auf Lebenszeichen'
-        output += '\n/report <Meldung> Leitet eine Meldung an die Verantwortlichen weiter'
+        output += '\nHilfe: Zeigt die Befehle'
+        output += '\nFüllstand überprüfen: Gibt den Füllstand des Automaten'
+        output += '\nProblem melden: Leitet eine Meldung an die Verantwortlichen weiter'
 
         user_id = update.effective_user.id
         if user_id in self.admin_user_id:
@@ -156,13 +200,8 @@ class Telegram_Bot(Thread):
         name = self.get_name(update)
         help_text = self.get_helptext(update)
         update.message.reply_text('Hallo {}!\nIch bin ein Bot für den VCS-Bierautomaten. Bei Fragen & Feedback wende dich an bierko@vcs.ethz.ch.\n{}'.format(name, help_text))
+        self.default_state(bot, update)
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
-    def check_responsiveness(self, bot, update):
-        update.message.reply_text('🤖')
 
     # name
     # INFO:
@@ -170,19 +209,73 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def check_fill_status(self, bot, update):
         update.message.reply_text('🤖')
+        self.default_state(bot, update)
+
+
+
 
     # name
     # INFO:
     # ARGS:
     # RETURNS:
-    def report(self, bot, update, args):
+    def report_entry(self, bot, update):
         if update.message.from_user.id not in self.blacklist_user_id:
-            update.message.reply_text('Deine Meldung wurde übermittelt!')
-            name = self.get_name(update)
-
-            bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}'.format(name, update.effective_user.id, update.message.date, ' '.join(args)), disable_notification=True)
+            update.message.reply_text('Hiermit wirst du eine Meldung an die Administratoren des Bierautomaten senden. Übermässige oder unsachgemässe Verwendung führt dazu, dass du gesperrt wirst.\n\nBitte sende mir deine Meldung als Nachricht oder breche den Vorgang mit /cancel ab:', reply_markup = ReplyKeyboardRemove())
+            return 1
         else:
-            update.message.reply_text('Du darfst keine Meldungen mehr einreichen.\nHälst du das für einen Fehler, melde dich bei bierko@vcs.ethz.ch')
+            update.message.reply_text('Du darfst keine Meldungen mehr einreichen.\nHälst du das für einen Fehler, melde dich bei bierko@vcs.ethz.ch', reply_markup = ReplyKeyboardRemove())
+            self.default_state(bot, update)
+            return ConversationHandler.END
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def report_text(self, bot, update):
+        update.message.reply_text('Deine Meldung wurde übermittelt!', reply_markup = ReplyKeyboardRemove())
+        bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}'.format(self.get_name(update), update.effective_user.id, update.message.date, update.message.text), disable_notification=True)
+        self.default_state(bot, update)
+        return ConversationHandler.END
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def report_cancel(self, bot, update):
+        update.message.reply_text('Vorgang abgebrochen.', reply_markup = ReplyKeyboardRemove())
+        self.default_state(bot, update)
+        return ConversationHandler.END
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def credits_entry(self, bot, update):
+        # check if user has associated rfid, if not: present rfid submission dialogue, if yes: print remaining credits based on connectors
+        return ConversationHandler.END
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def credits_text(self, bot, update):
+        # present rfid submission dialogue, add /cancel info
+        # ensure sanitisation!
+        return ConversationHandler.END
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def credits_cancel(self, bot, update):
+        update.message.reply_text('Vorgang abgebrochen.', reply_markup = ReplyKeyboardRemove())
+        self.default_state(bot, update)
+        return ConversationHandler.END
+
 
     # name
     # INFO:
@@ -190,6 +283,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def help(self, bot, update):
         update.message.reply_text(self.get_helptext(update))
+        self.default_state(bot, update)
 
     # name
     # INFO:
@@ -205,6 +299,7 @@ class Telegram_Bot(Thread):
     @admin_only
     def change_fillstatus(self, bot, update, args):
         update.message.reply_text('To be implemented!')
+        self.default_state(bot, update)
 
     # name
     # INFO:
@@ -213,6 +308,7 @@ class Telegram_Bot(Thread):
     @admin_only
     def ban_userid(self, bot, update, args):
         update.message.reply_text('User ID {} wurde geblockt!'.format(args))
+        self.default_state(bot, update)
 
 
 # name

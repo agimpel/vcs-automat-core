@@ -1,24 +1,17 @@
 import sys
+sys.path.append('..')
 import logging
 import time
 import os.path
 import signal
 from threading import Thread
 
-from modules.rfid_reader import RFID_Reader
 from modules.telegram_bot import Telegram_Bot
-from modules.mdb_handler_dummy import MDB_Handler
-from worker import Worker
-
-from connectors import User
-from connectors.database import DB_ID
-from connectors.vcs import VCS_ID
-ID_PROVIDERS = (DB_ID, VCS_ID)
 
 # general settings
-PATH = os.path.abspath(os.path.dirname(__file__))
-CFG = os.path.join(PATH, "/config/")
-DB = os.path.join(PATH, "/database/")
+PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CFG = os.path.join(PATH, "../config/")
+DB = os.path.join(PATH, "../database/")
 
 
 # set-up of general logging
@@ -32,17 +25,34 @@ logging.disable(logging.DEBUG)
 
 # set-up for logging of main. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 loglevel = logging.DEBUG
-logtitle = 'test'
+logtitle = 'main'
 logger = logging.getLogger(logtitle)
 logger.setLevel(loglevel)
 
 
+logger.info('start tbot thread')
+tbot = Telegram_Bot()
+tbot.start()
 
-# UNIT TESTS BELOW
+
+try:
+    while True:
+        if not tbot.isAlive():
+            logger.error('tbot thread is dead')
+            tbot.exit()
+            if tbot.isAlive():
+                tbot.join(5.0)
+            sys.exit()
+        time.sleep(1)
 
 
-conn = VCS_ID()
-print(vars(conn.auth('000000')))
+except KeyboardInterrupt:
+    tbot.exit()
+    if tbot.isAlive():
+        tbot.join(5.0)
+    sys.exit()
+
+
 
 
 

@@ -11,7 +11,7 @@ from modules.mdb_handler_dummy import MDB_Handler
 from worker import Worker
 
 # general settings
-PATH = os.path.abspath(os.path.dirname(__file__))
+PATH = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(PATH, "/config/")
 DB = os.path.join(PATH, "/database/")
 
