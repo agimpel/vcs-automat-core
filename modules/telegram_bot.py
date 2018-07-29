@@ -82,6 +82,9 @@ class Telegram_Bot(Thread):
         # start telegram bot
         self.tbot_up.start_polling()
 
+        # signal startup is finished
+        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread ist gestartet.', disable_notification=True)
+
         while self.is_running:
             time.sleep(0.05)
 

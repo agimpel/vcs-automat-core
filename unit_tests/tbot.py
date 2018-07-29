@@ -22,9 +22,6 @@ logging.basicConfig(level=logging.DEBUG,
                     datefmt='%Y-%m-%d %H:%M:%S',
                     handlers=[logging.FileHandler(PATH + "/main.log"), logging.StreamHandler()])
 
-# setting of global minimum logging level
-logging.disable(logging.DEBUG)
-
 # set-up for logging of main. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 loglevel = logging.DEBUG
 logtitle = 'main'
