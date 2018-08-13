@@ -1,22 +1,3 @@
-
-import time
-
-
-
-
-
-def poll():
-    text = ''
-    while True:
-        d = h.read(8)
-        if d and str(d[2]) in numbers:
-            text += str(numbers[str(d[2])])
-            print(text)
-
-
-
-
-
 from threading import Thread
 import logging
 import queue
