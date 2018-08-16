@@ -8,12 +8,14 @@ import os.path
 import signal
 from threading import Thread
 
+from connectors import User
+from connectors.vcs import VCS_ID
 from modules.telegram_bot import Telegram_Bot
 
 # general settings
 PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CFG = os.path.join(PATH, "../config/")
-DB = os.path.join(PATH, "../database/")
+CFG = os.path.join(PATH, "/config/")
+DB = os.path.join(PATH, "/database/")
 
 
 # set-up of general logging

@@ -7,12 +7,22 @@ from threading import Thread
 import sqlite3
 from functools import wraps
 import configparser
+import time
 
 
 from modules import CFG, DB
+from connectors.vcs import VCS_ID
+
 
 
 class Telegram_Bot(Thread):
+
+    # in order to prevent massive amounts of requests to the api server, cache results of previous api calls for maxage
+    api_information = {'last_reset': None, 'next_reset': None, 'standard_credits': None, 'reset_interval': None, 'last_update': 0}
+    api_information_maxage = 60 #s
+    rfid_data = {'default': {'credits': 0, 'timestamp': 0}}
+    rfid_data_maxage = 5 #s
+
 
     # name
     # INFO:
@@ -60,7 +70,7 @@ class Telegram_Bot(Thread):
         credits_handler = ConversationHandler(
             entry_points = [RegexHandler('(Guthaben überprüfen)', self.credits_entry)],
             states = {
-                1: [MessageHandler(Filters.text, self.credits_text)],
+                1: [MessageHandler(Filters.text, self.credits_setrfid)],
             },
             fallbacks = [CommandHandler('cancel', self.credits_cancel)]
         )
@@ -71,6 +81,7 @@ class Telegram_Bot(Thread):
         self.tbot_dp.add_handler(CommandHandler("start", self.on_start))
         self.tbot_dp.add_handler(RegexHandler("(Hilfe)", self.help))
         self.tbot_dp.add_handler(RegexHandler("(Füllstand überprüfen)", self.check_fill_status))
+        self.tbot_dp.add_handler(RegexHandler("(Allgemeine Informationen anzeigen)", self.get_api_info))
 
         # admin only commands
         self.tbot_dp.add_handler(CommandHandler("ban", self.ban_userid, pass_args=True))
@@ -83,7 +94,7 @@ class Telegram_Bot(Thread):
         self.tbot_up.start_polling()
 
         # signal startup is finished
-        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread ist gestartet.', disable_notification=True)
+        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
 
         while self.is_running:
             time.sleep(0.05)
@@ -123,6 +134,9 @@ class Telegram_Bot(Thread):
 
         db.execute('SELECT * FROM blacklist')
         self.blacklist_user_id = [item[0] for item in db.fetchall()]
+
+        db.execute('SELECT * FROM users')
+        self.users_rfid = [[item[0], item[1]] for item in db.fetchall()]
 
         db_connector.close()
         self.logger.info('admin user ids and blacklist loaded')
@@ -216,6 +230,26 @@ class Telegram_Bot(Thread):
 
 
 
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def get_api_info(self, bot, update):
+        if time.time() > self.api_information['last_update'] + self.api_information_maxage:
+            conn = VCS_ID()
+            data = conn.info()
+            for setting in ['last_reset', 'next_reset', 'standard_credits', 'reset_interval']:
+                if setting in data: 
+                    self.api_information[setting] = data[setting]
+                else:
+                    self.api_information[setting] = None
+                self.api_information['last_update'] = time.time()
+
+        update.message.reply_text('Das Guthaben wird am '+time.strftime('%d.%m, %H', time.localtime(int(self.api_information['next_reset'])))+' Uhr erneuert.\n\nMomentan steht alle '+self.api_information['reset_interval']+' Tage ein Guthaben von '+self.api_information['standard_credits']+' Freigetränk(en) zur Verfügung. Zuletzt wurde das Guthaben am '+time.strftime('%d.%m, %H', time.localtime(int(self.api_information['last_reset'])))+' Uhr erneuert.')
+        self.default_state(bot, update)
+
+
+
 
     # name
     # INFO:
@@ -258,13 +292,29 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def credits_entry(self, bot, update):
         # check if user has associated rfid, if not: present rfid submission dialogue, if yes: print remaining credits based on connectors
+        if update.effective_user.id not in [user[0] for user in self.users_rfid]:
+            update.message.reply_text('Um dein Guthaben abzurufen muss deine Legi-Identifikationsnummer mit deinem Telegram-Account in Verbindung gebracht werden. Ich werde mir die Legi-Identifikationsnummer merken und künftig direkt mit deinem Guthaben antworten.\n\nBitte sende mir deine Legi-Identifikationsnummer als Nachricht oder breche den Vorgang mit /cancel ab:', reply_markup = ReplyKeyboardRemove())
+            return 1
+        rfid = self.users_rfid[update.effective_user.id][1]
+        if rfid in self.rfid_data and time.time() < self.rfid_data[rfid]['timestamp'] + self.rfid_data_maxage:
+            remaining_credits = self.rfid_data[rfid]['credits']
+        else:
+            conn = VCS_ID()
+            data = conn.auth(rfid)
+            if data is False:
+                update.message.reply_text('Deine RFID ist unbekannt oder ein Fehler ist aufgetreten.')
+                self.default_state(bot, update)
+                return ConversationHandler.END
+            remaining_credits = data.credits
+            update.message.reply_text('Dein Guthaben beträgt '+str(remaining_credits)+' Freigetränk(e).')
+            self.default_state(bot, update)
         return ConversationHandler.END
 
     # name
     # INFO:
     # ARGS:
     # RETURNS:
-    def credits_text(self, bot, update):
+    def credits_setrfid(self, bot, update):
         # present rfid submission dialogue, add /cancel info
         # ensure sanitisation!
         return ConversationHandler.END
