@@ -2,3 +2,4 @@
 secret = 1234
 auth_url = http://localhost/endpoints/auth.php
 report_url = http://localhost/endpoints/auth.php
+info_url = http://localhost/endpoints/info.php

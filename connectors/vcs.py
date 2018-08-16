@@ -67,6 +67,20 @@ class VCS_ID(IdProvider):
 
 
 
+    def info(self):
+        try:
+            response = self.send_post_request(None, self.info_url)
+            if response is False:
+                self.logger.critical("CRITICAL: Info was unsuccessful.")
+                return False
+            else:
+                self.logger.debug("Info data was received.")
+                return response
+        except Exception as e:
+            self.logger.exception("info exception")
+            return False
+
+
 
 
 
@@ -77,6 +91,7 @@ class VCS_ID(IdProvider):
     # ARGS:     data -> (dict) body of the POST request, url -> (string) target URL for POST request
     # RETURNS:
     def send_post_request(self, data, url):
+        if data is None: data = {}
         data['timestamp'] = int(time.time());
         data['nonce'] = binascii.hexlify(os.urandom(10)).decode()+str(int(time.time()));
         body = json.dumps(data).encode('utf8')
@@ -168,6 +183,7 @@ class VCS_ID(IdProvider):
         self.api_secret = bytearray(config['api']['secret'], 'utf8')
         self.auth_url = str(config['api']['auth_url'])
         self.report_url = str(config['api']['report_url'])
+        self.info_url = str(config['api']['info_url'])
 
 
 
