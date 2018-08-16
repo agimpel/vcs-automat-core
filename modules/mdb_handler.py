@@ -301,5 +301,5 @@ class MDB_Handler(Thread):
             self.send_data(self.MDB_JUST_RESET)
             self.logger.debug("MDB: [LOGIC] Just reset")
 
-        if self.serial.isOpen():
-            self.serial.close()
+        if self.ser.isOpen():
+            self.ser.close()
