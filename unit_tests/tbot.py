@@ -19,13 +19,13 @@ DB = os.path.join(PATH, "/database/")
 
 
 # set-up of general logging
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     handlers=[logging.FileHandler(PATH + "/main.log"), logging.StreamHandler()])
 
 # set-up for logging of main. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-loglevel = logging.DEBUG
+loglevel = logging.INFO
 logtitle = 'main'
 logger = logging.getLogger(logtitle)
 logger.setLevel(loglevel)

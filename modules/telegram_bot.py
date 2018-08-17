@@ -8,7 +8,7 @@ import sqlite3
 from functools import wraps
 import configparser
 import time
-
+import re
 
 from modules import CFG, DB
 from connectors.vcs import VCS_ID
@@ -21,7 +21,7 @@ class Telegram_Bot(Thread):
     api_information = {'last_reset': None, 'next_reset': None, 'standard_credits': None, 'reset_interval': None, 'last_update': 0}
     api_information_maxage = 60 #s
     rfid_data = {'default': {'credits': 0, 'timestamp': 0}}
-    rfid_data_maxage = 5 #s
+    rfid_data_maxage = 60 #s
 
 
     # name
@@ -30,7 +30,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def __init__(self):
         # set-up for logging of tbot. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'tbot'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
@@ -87,6 +87,9 @@ class Telegram_Bot(Thread):
         self.tbot_dp.add_handler(CommandHandler("ban", self.ban_userid, pass_args=True))
         self.tbot_dp.add_handler(CommandHandler("fillstatus", self.change_fillstatus, pass_args=True))
 
+        # fallback command
+        self.tbot_dp.add_handler(RegexHandler(".*", self.help))
+
         # log all errors
         self.tbot_dp.add_error_handler(self.error)
 
@@ -97,7 +100,10 @@ class Telegram_Bot(Thread):
         self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
 
         while self.is_running:
-            time.sleep(0.05)
+            time.sleep(1)
+        
+        # signal shutdown
+        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestoppt.', disable_notification=True)
 
 
     # name
@@ -118,9 +124,25 @@ class Telegram_Bot(Thread):
         config.read(cfg_path)
         self.telegram_api_key = str(config['telegram']['api_key'])
         self.admin_group_id = int(config['telegram']['admin_group_id'])
-        self.logger.info('api key and admin group id loaded')
+        self.logger.info('config loaded')
 
 
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def register_user_in_db(self, db_path, id, rfid):
+        db_connector = sqlite3.connect(db_path)
+        db = db_connector.cursor()
+
+        db.execute("INSERT INTO users (ID, rfid) VALUES ('"+str(id)+"','"+str(rfid)+"')")
+        db_connector.commit()
+
+        db_connector.close()
+        self.logger.info('ID '+str(id)+ ' with RFID '+str(rfid)+' successfully registered in database.')
+        return True
+
+    
     # name
     # INFO:
     # ARGS:
@@ -136,10 +158,10 @@ class Telegram_Bot(Thread):
         self.blacklist_user_id = [item[0] for item in db.fetchall()]
 
         db.execute('SELECT * FROM users')
-        self.users_rfid = [[item[0], item[1]] for item in db.fetchall()]
+        self.users_rfid = {item[0]: item[1] for item in db.fetchall()}
 
         db_connector.close()
-        self.logger.info('admin user ids and blacklist loaded')
+        self.logger.info('database loaded')
 
 
     # name
@@ -149,7 +171,7 @@ class Telegram_Bot(Thread):
     def admin_only(func):
         @wraps(func)
         def wrapped(self, bot, update, *args, **kwargs):
-            user_id = update.effective_user.id
+            user_id = str(update.effective_user.id)
             if user_id not in self.admin_user_id:
                 self.logger.warning("Unauthorized access denied for {}.".format(user_id))
                 return
@@ -197,7 +219,7 @@ class Telegram_Bot(Thread):
         output += '\nFüllstand überprüfen: Gibt den Füllstand des Automaten'
         output += '\nProblem melden: Leitet eine Meldung an die Verantwortlichen weiter'
 
-        user_id = update.effective_user.id
+        user_id = str(update.effective_user.id)
         if user_id in self.admin_user_id:
             output += '\n\nWeitere Befehle für Admins:'
             output += '\n/fillstatus <Zahl> Aktualisiert den Füllstand des Automaten auf <Zahl>'
@@ -292,10 +314,10 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def credits_entry(self, bot, update):
         # check if user has associated rfid, if not: present rfid submission dialogue, if yes: print remaining credits based on connectors
-        if update.effective_user.id not in [user[0] for user in self.users_rfid]:
+        if str(update.effective_user.id) not in self.users_rfid:
             update.message.reply_text('Um dein Guthaben abzurufen muss deine Legi-Identifikationsnummer mit deinem Telegram-Account in Verbindung gebracht werden. Ich werde mir die Legi-Identifikationsnummer merken und künftig direkt mit deinem Guthaben antworten.\n\nBitte sende mir deine Legi-Identifikationsnummer als Nachricht oder breche den Vorgang mit /cancel ab:', reply_markup = ReplyKeyboardRemove())
             return 1
-        rfid = self.users_rfid[update.effective_user.id][1]
+        rfid = self.users_rfid[str(update.effective_user.id)]
         if rfid in self.rfid_data and time.time() < self.rfid_data[rfid]['timestamp'] + self.rfid_data_maxage:
             remaining_credits = self.rfid_data[rfid]['credits']
         else:
@@ -303,11 +325,13 @@ class Telegram_Bot(Thread):
             data = conn.auth(rfid)
             if data is False:
                 update.message.reply_text('Deine RFID ist unbekannt oder ein Fehler ist aufgetreten.')
+                self.logger.error('RFID '+str(rfid)+' was either unknown or there was an error.')
                 self.default_state(bot, update)
                 return ConversationHandler.END
             remaining_credits = data.credits
-            update.message.reply_text('Dein Guthaben beträgt '+str(remaining_credits)+' Freigetränk(e).')
-            self.default_state(bot, update)
+        update.message.reply_text('Dein Guthaben beträgt '+str(remaining_credits)+' Freigetränk(e).')
+        self.rfid_data[rfid] = {'credits': remaining_credits, 'timestamp': time.time()}
+        self.default_state(bot, update)
         return ConversationHandler.END
 
     # name
@@ -317,7 +341,21 @@ class Telegram_Bot(Thread):
     def credits_setrfid(self, bot, update):
         # present rfid submission dialogue, add /cancel info
         # ensure sanitisation!
-        return ConversationHandler.END
+        raw_rfid = str(update.message.text)
+        if re.compile("[^0-9]").match(raw_rfid) is not None:
+            self.logger.info('Entered rfid contained non-numeric characters.')
+            update.message.reply_text('Die Identifikationsnummer kann nur Zahlen enthalten. Versuche es erneut:')
+            return 1
+        if len(raw_rfid) is not 6:
+            self.logger.info('Entered rfid is not of correct length.')
+            update.message.reply_text('Die Identifikationsnummer besteht aus 6 Zahlen. Versuche es erneut:')
+            return 1
+
+        self.users_rfid[update.effective_user.id] = raw_rfid
+        self.rfid_data[raw_rfid] = {'credits': 0, 'timestamp': 0}
+        self.register_user_in_db(os.path.join(DB, "tbot.db"), update.effective_user.id, raw_rfid)
+        update.message.reply_text('Die Identifikationsnummer wurde erfolgreich gespeichert!')
+        return self.credits_entry(bot, update)
 
 
     # name
