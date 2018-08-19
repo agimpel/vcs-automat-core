@@ -15,6 +15,10 @@ from connectors.vcs import VCS_ID
 
 
 
+# name
+# INFO:
+# ARGS:
+# RETURNS:
 class Telegram_Bot(Thread):
 
     # in order to prevent massive amounts of requests to the api server, cache results of previous api calls for maxage
@@ -97,7 +101,7 @@ class Telegram_Bot(Thread):
                 1: [MessageHandler(Filters.text, self.amount_get_slot, pass_user_data=True)],
                 2: [MessageHandler(Filters.text, self.amount_get_amount, pass_user_data=True)],
             },
-            fallbacks = [CommandHandler('cancel', self.amount_cancel)]
+            fallbacks = [RegexHandler("(Beenden)", self.amount_cancel)]
         )
         self.tbot_dp.add_handler(amount_handler)
 
@@ -107,7 +111,7 @@ class Telegram_Bot(Thread):
                 1: [MessageHandler(Filters.text, self.maxamount_get_slot, pass_user_data=True)],
                 2: [MessageHandler(Filters.text, self.maxamount_get_amount, pass_user_data=True)],
             },
-            fallbacks = [CommandHandler('cancel', self.maxamount_cancel)]
+            fallbacks = [RegexHandler("(Beenden)", self.maxamount_cancel)]
         )
         self.tbot_dp.add_handler(maxamount_handler)
 
@@ -117,7 +121,7 @@ class Telegram_Bot(Thread):
                 1: [MessageHandler(Filters.text, self.ban_get_id, pass_user_data=True)],
                 2: [MessageHandler(Filters.text, self.ban_get_confirmation, pass_user_data=True)],
             },
-            fallbacks = [CommandHandler('cancel', self.ban_cancel)]
+            fallbacks = [RegexHandler("(Beenden)", self.ban_cancel)]
         )
         self.tbot_dp.add_handler(ban_handler)
 
@@ -194,12 +198,14 @@ class Telegram_Bot(Thread):
         if amount is not None:
             db.execute("UPDATE automat SET amount = '"+str(amount)+"' WHERE slot = '"+str(slot)+"'")
             db_connector.commit()
+            self.logger.info('Amount in slot '+str(slot)+ ' updated to '+str(amount)+' successfully in database.')
 
         if max_amount is not None:
             db.execute("UPDATE automat SET max_amount = '"+str(max_amount)+"' WHERE slot = '"+str(slot)+"'")
+            db_connector.commit()
+            self.logger.info('Max amount in slot '+str(slot)+ ' updated to '+str(max_amount)+' successfully in database.')
 
         db_connector.close()
-        self.logger.info('Amount in slot '+str(slot)+ ' updated to '+str(amount)+' successfully in database.')
         return True
 
     
@@ -251,19 +257,37 @@ class Telegram_Bot(Thread):
         return ReplyKeyboardMarkup(keyboard)
 
 
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
     def default_keyboard_for_admins(self):
         keyboard = [['Allgemeine Informationen anzeigen'],['Guthaben überprüfen', 'Füllstand überprüfen'], ['Problem melden', 'Hilfe'], ['Administratives']]
         return ReplyKeyboardMarkup(keyboard)
 
 
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
     def admin_keyboard(self):
         keyboard = [['Füllstand ändern'], ['Maximalmengen ändern'], ['User bannen'], ['Zurück zur Übersicht']]
         return ReplyKeyboardMarkup(keyboard)
 
-    def slot_keyboard(self):
-        keyboard = [['1', '2'], ['3', '4'], ['5', '6'], ['Beenden']]
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def slot_keyboard(self, with_complete = False):
+        keyboard = [['1', '2', '3'], ['4', '5', '6'], ['Beenden']]
+        if with_complete is not False:
+            keyboard.insert(2, ['Alles gefüllt'])
         return ReplyKeyboardMarkup(keyboard)
 
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
     def default_state(self, bot, update):
         if str(update.effective_user.id) in self.admin_user_id:
             update.message.reply_text('Was kann ich für dich tun?', reply_markup = self.default_keyboard_for_admins())
@@ -480,7 +504,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def amount_entry(self, bot, update):
-        update.message.reply_text('Welcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard())
+        update.message.reply_text('Welcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
         return 1
 
 
@@ -492,17 +516,21 @@ class Telegram_Bot(Thread):
     def amount_get_slot(self, bot, update, user_data):
         slot = str(update.message.text)
         if slot == 'Beenden':
+            return self.amount_cancel(bot, update)
+        if slot == 'Alles gefüllt':
+            update.message.reply_text('Alle Slots auf ihr Maximum aktualisiert.')
+            for slot_number in self.automat_content: self.update_fillstatus_callback(slot_number, amount = self.automat_content[slot_number]['max_amount'])
             self.admin_panel(bot, update)
             return ConversationHandler.END
 
         try:
             slot = int(slot)
         except ValueError:
-            update.message.reply_text('Das ist ein ungültiger Slot.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard())
+            update.message.reply_text('Das ist ein ungültiger Slot.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
             return 1
         
         if slot not in self.automat_content:
-            update.message.reply_text('Das ist ein ungültiger Slot.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard())
+            update.message.reply_text('Das ist ein ungültiger Slot.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
             return 1
         update.message.reply_text('Auf welche Menge soll der Slot '+str(slot)+' aktualisiert werden?\nSende \'*\' für die Maximalmenge, also '+str(self.automat_content[slot]['max_amount'])+'.', reply_markup = ReplyKeyboardRemove())
         user_data['slot'] = slot
@@ -517,10 +545,9 @@ class Telegram_Bot(Thread):
     def amount_get_amount(self, bot, update, user_data):
         amount = str(update.message.text)
         if amount == 'Beenden':
-            self.admin_panel(bot, update)
-            return ConversationHandler.END
+            return self.amount_cancel(bot, update)
         if 'slot' not in user_data:
-            update.message.reply_text('Kein Slot gesetzt.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard())
+            update.message.reply_text('Kein Slot gesetzt.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
             return 1
         slot = user_data['slot']
         if amount == '*':
@@ -536,8 +563,8 @@ class Telegram_Bot(Thread):
             update.message.reply_text('Ungültiger Wert.\nAuf welche Menge soll der Slot '+str(slot)+' aktualisiert werden?\nSende \'*\' für die Maximalmenge, also '+str(self.automat_content[slot]['max_amount'])+'.', reply_markup = ReplyKeyboardRemove())
             return 2
         user_data.pop('slot')
-        self.update_fillstatus_callback(slot, amount)
-        update.message.reply_text('Slot '+str(slot)+' erfolgreich auf '+str(amount)+' geändert.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard())
+        self.update_fillstatus_callback(slot, amount = amount)
+        update.message.reply_text('Slot '+str(slot)+' erfolgreich auf '+str(amount)+' geändert.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
         return 1
 
 
@@ -547,6 +574,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def amount_cancel(self, bot, update):
+        update.message.reply_text('Vorgang beendet.')
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
@@ -558,7 +586,8 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def maxamount_entry(self, bot, update):
-        return ConversationHandler.END
+        update.message.reply_text('Für welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
+        return 1
 
 
     # name
@@ -567,7 +596,22 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def maxamount_get_slot(self, bot, update, user_data):
-        return ConversationHandler.END
+        slot = str(update.message.text)
+        if slot == 'Beenden':
+            return self.maxamount_cancel(bot, update)
+
+        try:
+            slot = int(slot)
+        except ValueError:
+            update.message.reply_text('Das ist ein ungültiger Slot.\nFür welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
+            return 1
+        
+        if slot not in self.automat_content:
+            update.message.reply_text('Das ist ein ungültiger Slot.\nFür welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
+            return 1
+        update.message.reply_text('Auf welche Maximalmenge soll der Slot '+str(slot)+' aktualisiert werden?', reply_markup = ReplyKeyboardRemove())
+        user_data['slot'] = slot
+        return 2
 
 
     # name
@@ -576,7 +620,27 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def maxamount_get_amount(self, bot, update, user_data):
-        return ConversationHandler.END
+        amount = str(update.message.text)
+        if amount == 'Beenden':
+            return self.maxamount_cancel(bot, update)
+        if 'slot' not in user_data:
+            update.message.reply_text('Kein Slot gesetzt.\nFür welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
+            return 1
+        slot = user_data['slot']
+
+        try:
+            amount = int(amount)
+        except ValueError:
+            update.message.reply_text('Ungültiger Wert.\nAuf welche Maximalmenge soll der Slot '+str(slot)+' aktualisiert werden?', reply_markup = ReplyKeyboardRemove())
+            return 2
+        
+        if not amount > 0:
+            update.message.reply_text('Ungültiger Wert.\nAuf welche Maximalmenge soll der Slot '+str(slot)+' aktualisiert werden?', reply_markup = ReplyKeyboardRemove())
+            return 2
+        user_data.pop('slot')
+        self.update_maxfillstatus_callback(slot, amount)
+        update.message.reply_text('Slot '+str(slot)+' erfolgreich auf Maximalmenge '+str(amount)+' geändert.\nFür welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
+        return 1
 
 
     # name
@@ -585,6 +649,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def maxamount_cancel(self, bot, update):
+        update.message.reply_text('Vorgang beendet.')
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
@@ -649,6 +714,23 @@ class Telegram_Bot(Thread):
             new_amount = amount
         self.automat_content[slot]['amount'] = new_amount
         self.set_amount_in_db(slot, amount = new_amount)
+
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def update_maxfillstatus_callback(self, slot, maxamount):
+        if slot not in self.automat_content:
+            self.logger.error('Received max-content update for slot '+str(slot)+' which is unknown. Dismissing.')
+            return
+        if maxamount < 0:
+            self.logger.error('Received max-content update for slot '+str(slot)+' which is negative. Dismissing.')
+            return
+        self.logger.debug('Received set max-content update for slot '+str(slot)+' with specified new max-amount '+str(maxamount))
+        self.automat_content[slot]['max_amount'] = maxamount
+        self.set_amount_in_db(slot, max_amount = maxamount)
 
 
 # name
