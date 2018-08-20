@@ -790,10 +790,8 @@ class Telegram_Bot(Thread):
                     self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist nur noch '+str(int(percentage*100))+'% gefüllt, mit '+str(new_amount)+' von '+str(self.automat_content[slot]['max_amount'])+'.', disable_notification=True)
                     break
         elif old_amount < new_amount:
-            for percentage in self.notification_content_levels[::1]:
-                if new_amount > percentage * self.automat_content[slot]['max_amount']:
-                    self.automat_content[slot]['notification_level'] = percentage
-                    break
+            self.automat_content[slot]['notification_level'] = 0
+
         
 
 
