@@ -15,10 +15,10 @@ from connectors.vcs import VCS_ID
 
 
 
-# name
-# INFO:
-# ARGS:
-# RETURNS:
+# Telegram_Bot
+# INFO:     Thread of the telegram bot, started from main thread and runs continuously. All handlers and commands are defined within the class.
+# ARGS:     /
+# RETURNS:  /
 class Telegram_Bot(Thread):
 
     # in order to prevent massive amounts of requests to the api server, cache results of previous api calls for maxage
@@ -32,14 +32,17 @@ class Telegram_Bot(Thread):
     blacklist_user_id = []
 
     # list of currently available contents in the maschine per slot and maximal loading per slot
-    automat_content = {'slot': {'amount': 0, 'max_amount': 0}}
+    automat_content = {'slot': {'amount': 0, 'max_amount': 0, 'notification_level': 0}}
     max_content_per_slot = 50
 
+    # at which remaining content levels to notify the admin group (relative to maximal amount). Note: at 0, there is always an automatic notification
+    notification_content_levels = [0.25, 0.10, 0.05] # at 25%, 10% and 5%
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+
+    # __init__
+    # INFO:     Sets up logging and paths for config and database files, then reads them and starts the thread (using SQLite3)
+    # ARGS:     /
+    # RETURNS:  /
     def __init__(self):
         # set-up for logging of tbot. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
         self.loglevel = logging.INFO
@@ -56,10 +59,10 @@ class Telegram_Bot(Thread):
         self.is_running = False
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # run
+    # INFO:     Main loop of the telegram bot. All handlers for commands are registered here.
+    # ARGS:     /
+    # RETURNS:  /
     def run(self):
         self.is_running = True
 
@@ -137,12 +140,13 @@ class Telegram_Bot(Thread):
         # log all errors
         self.tbot_dp.add_error_handler(self.error)
 
-        # start telegram bot
+        # start telegram bot. This spawns another thread which is responsible for handling the Telegram API. It is terminated upon termination of this thread.
         self.tbot_up.start_polling()
 
         # signal startup is finished
         self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
 
+        # keep this thread alive
         while self.is_running:
             time.sleep(1)
         
@@ -150,19 +154,19 @@ class Telegram_Bot(Thread):
         self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestoppt.', disable_notification=True)
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # exit
+    # INFO:     Stops the telegram bot thread.
+    # ARGS:     /
+    # RETURNS:  /
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # read_cfg
+    # INFO:     Reads the configuration file for the telegram bot. Read values are the Telegram API key and the ID of the admin group.
+    # ARGS:     /
+    # RETURNS:  /
     def read_cfg(self):
         config = configparser.SafeConfigParser()
         config.read(self.cfg_path)
@@ -171,10 +175,10 @@ class Telegram_Bot(Thread):
         self.logger.info('config loaded')
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # register_user_in_db
+    # INFO:     Saves a relationship between Telegram ID, which is visible to the telegram bot, and RFID, which is necessary for authentication against the VCS API in the database.
+    # ARGS:     id -> (string) Telegram ID of user to register the RFID for, rfid -> (string) RFID of the identification card to save
+    # RETURNS:  True
     def register_user_in_db(self, id, rfid):
         db_connector = sqlite3.connect(self.db_path)
         db = db_connector.cursor()
@@ -187,10 +191,10 @@ class Telegram_Bot(Thread):
         return True
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # set_amount_in_db
+    # INFO:     Assing a content amount or the maximum available content amount of a slot to save in the database. amount is expected to be within [0, max_amount]
+    # ARGS:     slot -> (int) Slot of the automat, amount -> (int) amount to set the slot to, max_amount -> (int) maximum amount to set the slot to
+    # RETURNS:  True
     def set_amount_in_db(self, slot, amount = None, max_amount = None):
         db_connector = sqlite3.connect(self.db_path)
         db = db_connector.cursor()
@@ -208,6 +212,37 @@ class Telegram_Bot(Thread):
         db_connector.close()
         return True
 
+
+    # ban_user_in_db
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def ban_user_in_db(self, banned_id, id_of_admin = 000000):
+        db_connector = sqlite3.connect(self.db_path)
+        db = db_connector.cursor()
+
+        db.execute("INSERT INTO blacklist (ID, timestamp, by) VALUES ('"+str(banned_id)+"', '"+str(int(time.time()))+"', '"+str(id_of_admin)+"')")
+        db_connector.commit()
+        self.logger.info('Telegram ID '+str(banned_id)+ ' was banned by '+str(id_of_admin)+' successfully in database.')
+
+        db_connector.close()
+        return True
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def save_report_in_db(self, report_text, id_of_reporter):
+        db_connector = sqlite3.connect(self.db_path)
+        db = db_connector.cursor()
+
+        db.execute("INSERT INTO reports (ID, timestamp, text) VALUES ('"+str(id_of_reporter)+"', '"+str(int(time.time()))+"', '"+str(report_text)+"')")
+        db_connector.commit()
+        self.logger.info('Telegram ID '+str(id_of_reporter)+' and its report successfully saved in database.')
+
+        db_connector.close()
+        return True
     
     # name
     # INFO:
@@ -227,7 +262,7 @@ class Telegram_Bot(Thread):
         self.users_rfid = {item[0]: item[1] for item in db.fetchall()}
 
         db.execute('SELECT * FROM automat')
-        self.automat_content = {item[0]: {'amount': item[1], 'max_amount': item[2]} for item in db.fetchall()}
+        self.automat_content = {item[0]: {'amount': item[1], 'max_amount': item[2], 'notification_level': 0} for item in db.fetchall()}
 
         db_connector.close()
         self.logger.info('database loaded')
@@ -390,11 +425,11 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def report_entry(self, bot, update):
-        if update.message.from_user.id not in self.blacklist_user_id:
+        if str(update.message.from_user.id) not in self.blacklist_user_id:
             update.message.reply_text('Hiermit wirst du eine Meldung an die Administratoren des Bierautomaten senden. Übermässige oder unsachgemässe Verwendung führt dazu, dass du gesperrt wirst.\n\nBitte sende mir deine Meldung als Nachricht oder breche den Vorgang mit /cancel ab:', reply_markup = ReplyKeyboardRemove())
             return 1
         else:
-            update.message.reply_text('Du darfst keine Meldungen mehr einreichen.\nHälst du das für einen Fehler, melde dich bei bierko@vcs.ethz.ch', reply_markup = ReplyKeyboardRemove())
+            update.message.reply_text('Du darfst keine Meldungen mehr einreichen.\nHälst du das für einen Fehler, melde dich bei bierko@vcs.ethz.ch')
             self.default_state(bot, update)
             return ConversationHandler.END
 
@@ -406,6 +441,7 @@ class Telegram_Bot(Thread):
     def report_text(self, bot, update):
         update.message.reply_text('Deine Meldung wurde übermittelt!', reply_markup = ReplyKeyboardRemove())
         bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}'.format(self.get_name(update), update.effective_user.id, update.message.date, update.message.text), disable_notification=True)
+        self.save_report_in_db(update.message.text, update.effective_user.id)
         self.default_state(bot, update)
         return ConversationHandler.END
 
@@ -559,7 +595,7 @@ class Telegram_Bot(Thread):
             update.message.reply_text('Ungültiger Wert.\nAuf welche Menge soll der Slot '+str(slot)+' aktualisiert werden?\nSende \'*\' für die Maximalmenge, also '+str(self.automat_content[slot]['max_amount'])+'.', reply_markup = ReplyKeyboardRemove())
             return 2
         
-        if not (amount > 0 and amount <= self.automat_content[slot]['max_amount']):
+        if not (amount >= 0 and amount <= self.automat_content[slot]['max_amount']):
             update.message.reply_text('Ungültiger Wert.\nAuf welche Menge soll der Slot '+str(slot)+' aktualisiert werden?\nSende \'*\' für die Maximalmenge, also '+str(self.automat_content[slot]['max_amount'])+'.', reply_markup = ReplyKeyboardRemove())
             return 2
         user_data.pop('slot')
@@ -661,7 +697,8 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def ban_entry(self, bot, update):
-        return ConversationHandler.END
+        update.message.reply_text('Welche Telegram-ID soll gesperrt werden?\nAbbrechen mit \'Abbruch\'.', reply_markup = ReplyKeyboardRemove())
+        return 1
 
 
     # name
@@ -670,7 +707,20 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def ban_get_id(self, bot, update, user_data):
-        return ConversationHandler.END
+        id_to_ban = str(update.message.text)
+        if id_to_ban == 'Abbruch':
+            return self.ban_cancel(bot, update)
+
+        if re.compile("[^0-9]").match(id_to_ban) is not None:
+            update.message.reply_text('Das ist eine ungültige ID.\nWelche Telegram-ID soll gesperrt werden?\nAbbrechen mit \'Abbruch\'.', reply_markup = ReplyKeyboardRemove())
+            return 1
+        
+        if id_to_ban in self.blacklist_user_id:
+            update.message.reply_text('ID '+str(id_to_ban)+' ist bereits gesperrt.')
+            return self.ban_cancel(bot, update)
+        update.message.reply_text('Bitte bestätigen, dass die Telegram-ID '+str(id_to_ban)+' gesperrt werden soll:', reply_markup = ReplyKeyboardMarkup([['Ja'], ['Abbruch']]))
+        user_data['id'] = id_to_ban
+        return 2
 
 
     # name
@@ -679,6 +729,20 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def ban_get_confirmation(self, bot, update, user_data):
+        answer = str(update.message.text)
+        if answer == 'Abbruch':
+            return self.ban_cancel(bot, update)
+        if 'id' not in user_data:
+            update.message.reply_text('Keine ID gesetzt.\nWelche Telegram-ID soll gesperrt werden?\nAbbrechen mit \'Abbruch\'.', reply_markup = ReplyKeyboardRemove())
+            return 1
+        id_to_ban = user_data['id']
+        user_data.pop('id')
+        id_of_admin = str(update.effective_user.id)
+        self.ban_user_in_db(id_to_ban, id_of_admin)
+        self.blacklist_user_id.append(id_to_ban)
+        update.message.reply_text('Telegram ID '+str(id_to_ban)+' erfolgreich gesperrt.')
+        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-ID '+str(id_to_ban)+' wurde von '+str(id_of_admin)+' gesperrt.', disable_notification=True)
+        self.admin_panel(bot, update)
         return ConversationHandler.END
 
 
@@ -688,8 +752,10 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def ban_cancel(self, bot, update):
+        update.message.reply_text('Vorgang beendet.')
         self.admin_panel(bot, update)
         return ConversationHandler.END
+
 
 
 
@@ -714,6 +780,21 @@ class Telegram_Bot(Thread):
             new_amount = amount
         self.automat_content[slot]['amount'] = new_amount
         self.set_amount_in_db(slot, amount = new_amount)
+
+        if new_amount is 0:
+            self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist leer!', disable_notification=False)
+        elif old_amount > new_amount:
+            for percentage in self.notification_content_levels[::-1]:
+                if new_amount <= percentage * self.automat_content[slot]['max_amount'] and self.automat_content[slot]['notification_level'] < percentage:
+                    self.automat_content[slot]['notification_level'] = percentage
+                    self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist nur noch '+str(int(percentage*100))+'% gefüllt, mit '+str(new_amount)+' von '+str(self.automat_content[slot]['max_amount'])+'.', disable_notification=True)
+                    break
+        elif old_amount < new_amount:
+            for percentage in self.notification_content_levels[::1]:
+                if new_amount > percentage * self.automat_content[slot]['max_amount']:
+                    self.automat_content[slot]['notification_level'] = percentage
+                    break
+        
 
 
 
