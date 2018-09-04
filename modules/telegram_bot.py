@@ -131,6 +131,7 @@ class Telegram_Bot(Thread):
 
         # admin only commands
         self.tbot_dp.add_handler(RegexHandler("(Administratives)", self.admin_panel))
+        self.tbot_dp.add_handler(RegexHandler("(Datenbanken aktualisieren)", self.reload_databases))
         self.tbot_dp.add_handler(RegexHandler("(Zurück zur Übersicht)", self.default_state))
 
 
@@ -306,7 +307,7 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def admin_keyboard(self):
-        keyboard = [['Füllstand ändern'], ['Maximalmengen ändern'], ['User bannen'], ['Zurück zur Übersicht']]
+        keyboard = [['Füllstand ändern'], ['Maximalmengen ändern'], ['User bannen'], ['Datenbanken aktualisieren'], ['Zurück zur Übersicht']]
         return ReplyKeyboardMarkup(keyboard)
 
     # name
@@ -756,6 +757,18 @@ class Telegram_Bot(Thread):
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    @admin_only
+    def reload_databases(self, bot, update):
+        self.read_cfg()
+        self.initialise_db()
+        update.message.reply_text('Datenbanken werden neu gelesen.')
+        self.admin_panel(bot, update)
 
 
 
