@@ -307,7 +307,7 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def admin_keyboard(self):
-        keyboard = [['Füllstand ändern'], ['Maximalmengen ändern'], ['User bannen'], ['Datenbanken aktualisieren'], ['Zurück zur Übersicht']]
+        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Datenbanken aktualisieren'], ['Zurück zur Übersicht']]
         return ReplyKeyboardMarkup(keyboard)
 
     # name
