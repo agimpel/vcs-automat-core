@@ -78,7 +78,7 @@ class Worker(Thread):
                     if id is not False:
                         (self.current_credits, self.current_user, self.current_org) = id
                         self.mdbh.open_session = True
-                        self.logger.info("rfid {} was found in {} for user {} with {} credits".format(self.current_uid, self.current_org, self.current_user.name, self.current_credits))
+                        self.logger.info("rfid {} was found in {} with {} credits".format(self.current_uid, self.current_org, self.current_credits))
                     else:
                         self.logger.error("rfid {} was unknown, dismissing".format(self.current_uid))
                         (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
