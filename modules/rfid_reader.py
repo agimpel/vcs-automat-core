@@ -71,7 +71,7 @@ class RFID_Reader(Thread):
                 self.logger.debug('Processing raw data from rfid reader.')
                 rfid = self.validate(raw_data)
                 if rfid is not False:
-                    self.logger.debug('detected rfid: '+rfid)
+                    self.logger.debug('detected rfid: '+str(rfid))
                     self.rfid_queue.put(rfid)
 
                 time.sleep(5)
@@ -108,10 +108,10 @@ class RFID_Reader(Thread):
             self.logger.debug('Input was too short.')
             return False
         if raw_input[0:5] != 'LEGIC':
-            self.logger.debug('RFID is not of type LEGIC, got '+raw_input[0:5])
+            self.logger.debug('RFID is not of type LEGIC, got '+str(raw_input[0:5]))
             return False
         if raw_input[self.stamp_index:self.stamp_index+len(self.stamp)] != self.stamp:
-            self.logger.debug('RFID stamp was not correct, got '+raw_input[self.stamp_index:self.stamp_index+len(self.stamp)])
+            self.logger.debug('RFID stamp was not correct, got '+str(raw_input[self.stamp_index:self.stamp_index+len(self.stamp)]))
             return False
 
         self.logger.debug('RFID was valid.')
