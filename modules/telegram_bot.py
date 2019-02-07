@@ -36,7 +36,7 @@ class Telegram_Bot(Thread):
     max_content_per_slot = 50
 
     # at which remaining content levels to notify the admin group (relative to maximal amount). Note: at 0, there is always an automatic notification
-    notification_content_levels = [0.25, 0.10, 0.05] # at 25%, 10% and 5%
+    notification_content_levels = [0.25, 0.10, 0.05, 0.00] # at 25%, 10%, 5% and 0%
 
 
     # __init__
@@ -797,11 +797,13 @@ class Telegram_Bot(Thread):
         if new_amount is 0:
             self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist leer!', disable_notification=False)
         elif old_amount > new_amount:
-            for percentage in self.notification_content_levels[::-1]:
-                if new_amount <= percentage * self.automat_content[slot]['max_amount'] and self.automat_content[slot]['notification_level'] < percentage:
-                    self.automat_content[slot]['notification_level'] = percentage
-                    self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist nur noch '+str(int(percentage*100))+'% gefüllt, mit '+str(new_amount)+' von '+str(self.automat_content[slot]['max_amount'])+'.', disable_notification=True)
-                    break
+            relative_fill_level = new_amount/self.automat_content[slot]['max_amount']
+            current_notification_level = self.automat_content[slot]['notification_level']
+
+            if relative_fill_level <= self.notification_content_levels[current_notification_level]:
+                self.automat_content[slot]['notification_level'] = current_notification_level + 1
+                self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist nur noch '+str(int(relative_fill_level*100))+'% gefüllt, mit '+str(new_amount)+' von '+str(self.automat_content[slot]['max_amount'])+'.', disable_notification=True)
+
         elif old_amount < new_amount:
             self.automat_content[slot]['notification_level'] = 0
 
