@@ -7,7 +7,7 @@ from threading import Thread
 from connectors import User
 from connectors.database import DB_ID
 from connectors.vcs import VCS_ID
-ID_PROVIDERS = (DB_ID, VCS_ID)
+ID_PROVIDERS = (VCS_ID,)
 
 
 class Worker(Thread):
