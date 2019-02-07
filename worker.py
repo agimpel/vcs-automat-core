@@ -148,7 +148,7 @@ class Worker(Thread):
                     best_result = (credits, user, org)
 
         # return False if the user is unknown or the result with the highest number of available credits if user is known
-        if user is None:
+        if best_result is None:
             self.logger.error('rfid %s had no match', rfid)
             return False
         else:
