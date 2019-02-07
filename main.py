@@ -25,7 +25,7 @@ class main(Thread):
     def __init__(self):
 
         # set-up of general logging
-        logging.basicConfig(level=logging.DEBUG,
+        logging.basicConfig(level=logging.INFO,
                             format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S',
                             handlers=[logging.FileHandler(PATH + "/main.log"), logging.StreamHandler()])
@@ -45,7 +45,7 @@ class main(Thread):
         self.work.start()
 
         # set-up for logging of main. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'main'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)

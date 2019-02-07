@@ -44,7 +44,7 @@ class MDB_Handler(Thread):
     # RETURNS:
     def __init__(self):
         # set-up for logging of mdbh. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'mdbh'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
@@ -140,8 +140,8 @@ class MDB_Handler(Thread):
                 self.logger.info("MDB: [IN] Reset")
                 self.send_data(self.MDB_ACK)
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
         elif self.state == "DISABLED":
             self.logger.debug("STATE: DISABLED")
@@ -166,8 +166,8 @@ class MDB_Handler(Thread):
                 self.logger.debug("MDB: [IN] Extended Features")
                 self.send_data(self.MDB_EXT_FEATURES_RESPONSE)
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
         elif self.state == "ENABLED":
             self.logger.debug("STATE: ENABLED")
@@ -190,8 +190,8 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_ACK)
                 self.state = "RESET"
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
 
         elif self.state == "SESSION":
@@ -233,8 +233,8 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_ACK)
                 self.state = "SESSION END"
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
 
         elif self.state == "SESSION END":
@@ -244,8 +244,8 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_END_SESSION)
                 self.state = "DISPLAY END SESSION"
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
 
         elif self.state == "DISPLAY SESSION":
@@ -255,8 +255,8 @@ class MDB_Handler(Thread):
                 self.send_data(b'\x02\x3C      AMIV        ' + str(self.last_amount).encode('ascii') + b' Freibier   ')
                 self.state = "SESSION"
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
 
         elif self.state == "DISPLAY END SESSION":
@@ -266,8 +266,8 @@ class MDB_Handler(Thread):
                 self.send_data(b'\x02\x0A      AMIV         Zum Wohl!    ')
                 self.state = "ENABLED"
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
 
         elif self.state == "VEND CANCELED":
@@ -277,8 +277,8 @@ class MDB_Handler(Thread):
                 self.send_data(b'\x06')
                 self.state = "SESSION"
             else:
-                self.logger.warning("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
-                self.logger.warning("MDB: [IN] %s" % self.state)
+                self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
+                self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
 
     # name
@@ -296,8 +296,8 @@ class MDB_Handler(Thread):
             self.send_data(self.MDB_JUST_RESET)
             self.logger.debug("MDB: [LOGIC] Just reset")
         else:
-            self.logger.warning("MDB: [IN] Unhandled Frame {}".format(binascii.hexlify(frame)))
-            self.logger.warning("MDB: [IN] %s" % self.state)
+            self.logger.info("MDB: [IN] Unhandled Frame {}".format(binascii.hexlify(frame)))
+            self.logger.info("MDB: [IN] %s" % self.state)
             self.send_data(self.MDB_JUST_RESET)
             self.logger.debug("MDB: [LOGIC] Just reset")
 

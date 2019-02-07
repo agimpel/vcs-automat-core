@@ -23,7 +23,7 @@ class RFID_Reader(Thread):
     # RETURNS:
     def __init__(self):
         # set-up for logging of rfid. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'rfid'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)

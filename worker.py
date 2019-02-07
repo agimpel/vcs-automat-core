@@ -18,7 +18,7 @@ class Worker(Thread):
     # RETURNS:
     def __init__(self, rfid, mdbh, tbot):
         # set-up for logging of work. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'work'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
