@@ -43,7 +43,7 @@ class VCS_ID(IdProvider):
                 return None
             else:
                 self.logger.info("RFID was known and data was received")
-                return User(rfid = response['rfid'], credits = response['credits'], uid = response['uid'])
+                return User(rfid = int(response['rfid']), credits = int(response['credits']), uid = response['uid'])
         except Exception as e:
             self.logger.exception("auth exception")
             return None
