@@ -143,8 +143,9 @@ class MDB_Handler(Thread):
                 self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
                 self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
+
         elif self.state == "DISABLED":
-            self.logger.debug("STATE: DISABLED")
+            self.logger.info("STATE: DISABLED")
             if data == self.MDB_POLL:  # POLL
                 self.logger.debug("MDB: [IN] Poll")
                 self.send_data(self.MDB_ACK)
@@ -169,6 +170,7 @@ class MDB_Handler(Thread):
                 self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
                 self.logger.info("MDB: [IN] %s" % self.state)
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
+
         elif self.state == "ENABLED":
             self.logger.debug("STATE: ENABLED")
             if data == self.MDB_POLL:  # POLL
@@ -252,7 +254,7 @@ class MDB_Handler(Thread):
             self.logger.debug("STATE: DISPLAY")
             if data == self.MDB_POLL:  # POLL
                 self.logger.debug("MDB: [IN] Poll")
-                self.send_data(b'\x02\x3C      AMIV        ' + str(self.last_amount).encode('ascii') + b' Freibier   ')
+                self.send_data(b'\x02\x3C      VCS         ' + str(self.last_amount).encode('ascii') + b' Freibier    ')
                 self.state = "SESSION"
             else:
                 self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
@@ -263,7 +265,7 @@ class MDB_Handler(Thread):
             self.logger.debug("STATE: DISPLAY")
             if data == self.MDB_POLL:  # POLL
                 self.logger.debug("MDB: [IN] Poll")
-                self.send_data(b'\x02\x0A      AMIV         Zum Wohl!    ')
+                self.send_data(b'\x02\x0A      VCS              <3        ')
                 self.state = "ENABLED"
             else:
                 self.logger.info("MDB: [IN] Unhandled Frame " + str(binascii.hexlify(data)))
