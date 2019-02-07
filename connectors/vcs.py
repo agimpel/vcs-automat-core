@@ -40,13 +40,13 @@ class VCS_ID(IdProvider):
             response = self.send_post_request({"rfid":rfid}, self.auth_url)
             if response is False:
                 self.logger.info("RFID was unknown")
-                return False
+                return None
             else:
                 self.logger.info("RFID was known and data was received")
                 return User(rfid = response['rfid'], credits = response['credits'], uid = response['uid'])
         except Exception as e:
             self.logger.exception("auth exception")
-            return False
+            return None
 
     # name
     # INFO:
