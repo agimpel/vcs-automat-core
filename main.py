@@ -166,8 +166,6 @@ class Main(Thread):
     def queue_vending(self, slot_id):
         self.current_credits -= 1
         self.vending_queue.put((slot_id, self.current_uid, self.current_org))
-        if self.current_credits > 0:
-            self.mdbh.open_session = True
 
     # uid_lookup
     # INFO:     looks up 'rfid' from RFID reader in all identification providers and returns info on user, available credits and the authenticating organisation
