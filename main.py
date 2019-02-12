@@ -166,6 +166,7 @@ class Main(Thread):
     def queue_vending(self, slot_id):
         self.current_credits -= 1
         self.vending_queue.put((slot_id, self.current_uid, self.current_org))
+        self.tbot.update_fillstatus_callback(slot_id)
 
     # uid_lookup
     # INFO:     looks up 'rfid' from RFID reader in all identification providers and returns info on user, available credits and the authenticating organisation

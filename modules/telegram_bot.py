@@ -187,6 +187,9 @@ class Telegram_Bot(Thread):
         db.execute("INSERT INTO users (ID, rfid) VALUES ('"+str(id)+"','"+str(rfid)+"')")
         db_connector.commit()
 
+        db.execute('SELECT * FROM users')
+        self.users_rfid = {item[0]: item[1] for item in db.fetchall()}
+
         db_connector.close()
         self.logger.info('ID '+str(id)+ ' with RFID '+str(rfid)+' successfully registered in database.')
         return True
@@ -502,7 +505,7 @@ class Telegram_Bot(Thread):
 
         self.users_rfid[update.effective_user.id] = raw_rfid
         self.rfid_data[raw_rfid] = {'credits': 0, 'timestamp': 0}
-        self.register_user_in_db(os.path.join(DB, "tbot.db"), update.effective_user.id, raw_rfid)
+        self.register_user_in_db(update.effective_user.id, raw_rfid)
         update.message.reply_text('Die Identifikationsnummer wurde erfolgreich gespeichert!')
         return self.credits_entry(bot, update)
 
