@@ -111,6 +111,7 @@ class Main(Thread):
                                 self.mdbh.display_queue.put({'top': 'Kein Guthaben', 'bot': ':\'(', 'duration': 3})
                                 (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
                         else:
+                            self.mdbh.display_queue.put({'top': 'Legi/Benutzer', 'bot': 'unbekannt', 'duration': 3})
                             self.logger.error("rfid {} was unknown, dismissing".format(self.current_uid))
                             (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
                             self.mdbh.open_session = False
