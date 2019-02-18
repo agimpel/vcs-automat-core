@@ -36,7 +36,7 @@ class Main(Thread):
                             handlers=[logging.FileHandler(PATH + "/main.log"), logging.StreamHandler()])
 
         # setting of global minimum logging level
-        logging.disable(logging.NOTSET)
+        logging.disable(logging.DEBUG)
 
         # start services
         logging.info('starting threads')
