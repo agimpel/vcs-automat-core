@@ -147,7 +147,7 @@ class Telegram_Bot(Thread):
         self.tbot_up.start_polling()
 
         # signal startup is finished
-        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
+        # self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
 
         # keep this thread alive
         while self.is_running:
