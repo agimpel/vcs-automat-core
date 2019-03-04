@@ -484,7 +484,6 @@ class MDB_Handler(Thread):
             self.display_timeout = time.time() + duration - 0.9
             
             for line in range(0,len(lines)):
-                print(len(lines[line]))
                 if len(lines[line]) < 16:
                     missing = 16 - len(lines[line])
                     added_in_front = int(missing/2)
