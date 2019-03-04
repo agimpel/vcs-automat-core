@@ -11,7 +11,6 @@ from threading import Thread
 from modules.rfid_reader import RFID_Reader
 from modules.telegram_bot import Telegram_Bot
 from modules.mdb_handler import MDB_Handler
-from worker import Worker
 
 from connectors import User
 from connectors.database import DB_ID

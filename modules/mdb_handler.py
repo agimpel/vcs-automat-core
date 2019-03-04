@@ -49,7 +49,7 @@ class MDB_Handler(Thread):
     # RETURNS:
     def __init__(self):
         # set-up for logging of mdbh. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'mdbh'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
@@ -67,7 +67,7 @@ class MDB_Handler(Thread):
         self.available_callback = None
         self.last_amount = 0
 
-        self.default_display = {'top': 'VCS-Bierautomat', 'bot': 'Legi einscannen', 'duration': 3}
+        self.default_display = {'top': 'VCS-Bierautomat', 'bot': 'Legi einscannen', 'duration': 1}
 
 
 
@@ -88,6 +88,7 @@ class MDB_Handler(Thread):
         self.is_running = True
 
         while self.is_running:
+            time.sleep(0.1)
             data = self.poll_data()
 
             if data is not None:
@@ -165,6 +166,7 @@ class MDB_Handler(Thread):
     # RETURNS:
     def send_data(self, data):
         self.ser.write(self.MDB2PC_FRAME_BEGIN + data + self.MDB2PC_FRAME_STOP)
+        self.ser.flush()
 
 
 
@@ -260,9 +262,9 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_OPEN_SESSION)
                 self.logger.debug("OUT: Open Session")
                 self.state = "SESSION"
-                self.logger.debug("PROCEED TO: SESSION")
+                self.substate = None
+                self.logger.info("PROCEED TO: SESSION")
             else:
-                self.logger.debug("OUT: Display Request")
                 self.send_display_order(self.default_display)
 
         elif data == self.MDB_READER_ENABLE:
@@ -298,7 +300,7 @@ class MDB_Handler(Thread):
                 if time.time() - self.timer > self.TIMEOUT:
                     self.substate = "SESSION CANCEL"
                 else:
-                    self.send_display_order({'top': 'Slot aussuchen','bot': 'Guthaben: ' + str(self.last_amount), 'duration': 1})
+                    self.send_display_order({'top': 'Slot aussuchen','bot': 'Guthaben: ' + str(self.last_amount), 'duration': 5})
 
             elif data[0:2] == self.MDB_VEND_REQUEST:
                 self.logger.debug("IN: Vend Request")
@@ -360,6 +362,7 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: ACK")
                 self.state = "RESET"
                 self.logger.info("PROCEED TO: RESET")
+                self.substate = None
 
             elif data == self.MDB_SESSION_COMPLETE:
                 self.logger.debug("IN: Session Complete")
@@ -400,6 +403,7 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: ACK")
                 self.state = "RESET"
                 self.logger.info("PROCEED TO: RESET")
+                self.substate = None
 
             elif data == self.MDB_SESSION_COMPLETE:
                 self.logger.debug("IN: Session Complete")
@@ -443,6 +447,7 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: End Session")
                 self.state = "ENABLED"
                 self.logger.info("PROCEED TO: ENABLED")
+                self.substate = None
                 self.display_queue.put({'top': 'VCS', 'bot': '<3', 'duration': 3})
 
             elif data == self.MDB_SESSION_COMPLETE:

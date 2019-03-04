@@ -23,7 +23,7 @@ class VCS_ID(IdProvider):
     # RETURNS:
     def __init__(self):
         # set-up for logging of id-vcs. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self.loglevel = logging.DEBUG
+        self.loglevel = logging.INFO
         self.logtitle = 'id-vcs'
         self.logger = logging.getLogger(self.logtitle)
         self.logger.setLevel(self.loglevel)
@@ -42,7 +42,7 @@ class VCS_ID(IdProvider):
                 self.logger.info("RFID was unknown")
                 return None
             else:
-                self.logger.info("RFID was known and data was received")
+                self.logger.debug("RFID was known and data was received")
                 return User(rfid = int(response['rfid']), credits = int(response['credits']), uid = response['uid'])
         except Exception as e:
             self.logger.exception("auth exception")
@@ -101,15 +101,15 @@ class VCS_ID(IdProvider):
         try:
             resp = urllib.request.urlopen(req)
             http_code = resp.getcode()
-            self.logger.info("API responded with status " + str(http_code))
+            self.logger.debug("API responded with status " + str(http_code))
             if http_code is not 200: 
-                self.logger.info("This success status code is not implemented.")
+                self.logger.error("This success status code is not implemented.")
                 return False
             else:
                 resp_raw = resp.read()
                 resp_json = json.loads(resp_raw.decode('utf8'))
                 if (self.verify_signature(resp.getheader('X-SIGNATURE'), resp_raw) and self.verify_timestamp(resp_json['timestamp']) and self.verify_nonce(resp_json['nonce'])):
-                    self.logger.info("Verification of response successful.")
+                    self.logger.debug("Verification of response successful.")
                     return resp_json
                 else:
                     self.logger.error("Verification of response failed.")
@@ -132,41 +132,41 @@ class VCS_ID(IdProvider):
 
 
     def verify_signature(self, signature, body):
-        self.logger.info("Request has signature: "+signature)
+        self.logger.debug("Request has signature: "+signature)
         target_signature = hmac.new(self.api_secret, body, hashlib.sha512).hexdigest()
         if (hmac.compare_digest(target_signature, signature)):
-            self.logger.info("Signatures match. Verification of signature successful.")
+            self.logger.debug("Signatures match. Verification of signature successful.")
             return True
         else:
-            self.logger.info("Signatures do not match. Verification of signature failed.")
+            self.logger.error("Signatures do not match. Verification of signature failed.")
             return False
 
     
     def verify_timestamp(self, timestamp):
         timedelta = 30 #sec
-        self.logger.info("Request has timestamp: "+str(timestamp))
+        self.logger.debug("Request has timestamp: "+str(timestamp))
         if (timestamp < time.time() + timedelta and timestamp > time.time() - timedelta):
-            self.logger.info('Timestamp is within acceptance interval. Verification of timestamp successful.')
+            self.logger.debug('Timestamp is within acceptance interval. Verification of timestamp successful.')
             return True
         else:
-            self.logger.info('Timestamp is not within acceptance interval. Verification of timestamp failed.')
+            self.logger.error('Timestamp is not within acceptance interval. Verification of timestamp failed.')
             return False
 
 
 
     def verify_nonce(self, nonce):
-        self.logger.info('Request has nonce: '+str(nonce))
+        self.logger.debug('Request has nonce: '+str(nonce))
         db_connector = sqlite3.connect(os.path.join(DB, "vcs_nonces.db"))
         db = db_connector.cursor()
         db.execute('SELECT * FROM nonces WHERE nonce = ?', (nonce,))
         if (db.fetchone() == None):
             db.execute("INSERT INTO nonces (nonce, timestamp) VALUES (?, ?)", (str(nonce), str(int(time.time()))))
             db_connector.commit()
-            self.logger.info("Nonce was unknown. Verification of nonce successful.")
+            self.logger.debug("Nonce was unknown. Verification of nonce successful.")
             db_connector.close()
             return True
         else:
-            self.logger.info("Nonce was known. Verification of nonce failed.")
+            self.logger.error("Nonce was known. Verification of nonce failed.")
             db_connector.close()
             return False
 

@@ -57,6 +57,7 @@ class Telegram_Bot(Thread):
 
         Thread.__init__(self, daemon=True)
         self.is_running = False
+        self.shutdown = False
 
 
     # run
@@ -132,6 +133,7 @@ class Telegram_Bot(Thread):
         # admin only commands
         self.tbot_dp.add_handler(RegexHandler("(Administratives)", self.admin_panel))
         self.tbot_dp.add_handler(RegexHandler("(Datenbanken aktualisieren)", self.reload_databases))
+        self.tbot_dp.add_handler(RegexHandler("(Automat neustarten)", self.restart_service))
         self.tbot_dp.add_handler(RegexHandler("(Zurück zur Übersicht)", self.default_state))
 
 
@@ -145,7 +147,7 @@ class Telegram_Bot(Thread):
         self.tbot_up.start_polling()
 
         # signal startup is finished
-        # self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
+        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestartet.', disable_notification=True)
 
         # keep this thread alive
         while self.is_running:
@@ -310,7 +312,7 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def admin_keyboard(self):
-        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Datenbanken aktualisieren'], ['Zurück zur Übersicht']]
+        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Datenbanken aktualisieren'], ['Automat neustarten'], ['Zurück zur Übersicht']]
         return ReplyKeyboardMarkup(keyboard)
 
     # name
@@ -475,7 +477,7 @@ class Telegram_Bot(Thread):
         else:
             conn = VCS_ID()
             data = conn.auth(rfid)
-            if data is False:
+            if data is None:
                 update.message.reply_text('Deine RFID ist unbekannt oder ein Fehler ist aufgetreten.')
                 self.logger.error('RFID '+str(rfid)+' was either unknown or there was an error.')
                 self.default_state(bot, update)
@@ -772,6 +774,21 @@ class Telegram_Bot(Thread):
         self.initialise_db()
         update.message.reply_text('Datenbanken werden neu gelesen.')
         self.admin_panel(bot, update)
+
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    @admin_only
+    def restart_service(self, bot, update):
+        # Program will restart due to system service manager restarting the service after its timeout
+        update.message.reply_text('Automat wird neu gestartet. Bitte etwas Geduld.')
+        self.admin_panel(bot, update)
+        self.logger.warning('Restart was initiated. Will shut down process now.')
+        self.shutdown = True
+        self.is_running = False
 
 
 
