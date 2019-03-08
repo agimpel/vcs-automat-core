@@ -13,7 +13,7 @@ from modules.mdb_handler import MDB_Handler
 from connectors import User
 from connectors.database import DB_ID
 from connectors.vcs import VCS_ID
-ID_PROVIDERS = (VCS_ID,)
+ID_PROVIDERS = (VCS_ID, DB_ID)
 
 # general settings
 PATH = os.path.dirname(os.path.abspath(__file__))
