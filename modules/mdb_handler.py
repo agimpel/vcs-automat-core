@@ -43,10 +43,10 @@ class MDB_Handler(Thread):
     MDB_VEND_DENIED = b'\x06'
     MDB_VEND_APPROVED = b'\x05\xff\xff'
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # __init__
+    # INFO:     Sets up logging of this class and opens the serial connection to the MDB reader.
+    # ARGS:     -
+    # RETURNS:  -
     def __init__(self):
         # set-up for logging of mdbh. Level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
         self.loglevel = logging.INFO
@@ -57,6 +57,7 @@ class MDB_Handler(Thread):
         Thread.__init__(self, daemon=True)
         self.is_running = False
 
+        # Open up the serial connection and set up initial variables
         self.ser = serial.Serial('/dev/ttyS0', 115200, timeout=0.1) # find port with 'python -m serial.tools.list_ports'
         self.open_session = False
         self.state = "RESET"
@@ -66,22 +67,23 @@ class MDB_Handler(Thread):
         self.available_callback = None
         self.last_amount = 0
 
+        # Default text shown on the vending machine
         self.default_display = {'top': 'VCS-Bierautomat', 'bottom': 'Legi einscannen', 'duration': 5}
 
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # exit
+    # INFO:     Can be triggered from main thread to shut this thread down.
+    # ARGS:     -
+    # RETURNS:  -
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # run
+    # INFO:     Main thread of this class. Checks if new data was received from the MDB reader and processes it according to the current state of operation.
+    # ARGS:     -
+    # RETURNS:  -
     def run(self):
 
         self.is_running = True

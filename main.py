@@ -23,13 +23,13 @@ DB = os.path.join(PATH, "/database/")
 
 class Main(Thread):
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # __init__
+    # INFO:     Sets up logging and threads of this program.
+    # ARGS:     -
+    # RETURNS:  -
     def __init__(self):
 
-                # set-up of general logging
+        # set-up of general logging
         logging.basicConfig(level=logging.INFO,
                             format='%(asctime)s\t%(levelname)s\t[%(name)s: %(funcName)s]\t%(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S',
@@ -57,12 +57,14 @@ class Main(Thread):
         Thread.__init__(self, daemon=True)
         self.is_running = False
 
+        # Set up queue and default user data
         self.vending_queue = queue.Queue()
-
         self.current_uid = 0
         self.current_credits = 0
         self.current_user = User()
         self.current_org = 'undefined'
+
+        # set up callback functions for the MDB reader
         self.mdbh.set_dispensed_callback(self.queue_vending)
         self.mdbh.set_available_callback(self.credits_available)
 
@@ -71,10 +73,10 @@ class Main(Thread):
         for connector in ID_PROVIDERS:
             self.providers[connector.orgname] = connector()
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # run
+    # INFO:     Main thread of the program. Checks vending queue and rfid queue and coordinates authentication with the APIs
+    # ARGS:     -
+    # RETURNS:  -
     def run(self):
         self.is_running = True
 
@@ -85,6 +87,7 @@ class Main(Thread):
                 if not self.vending_queue.empty():
                     self.logger.debug('vending queue non-empty, processing queue')
                     try:
+                        # get vending information and report vend to the organisation of the user
                         (slot_id, rfid, org) = self.vending_queue.get()
                         if self.providers[org].report(rfid, slot_id):
                             self.logger.debug("report of vending for {} successful".format(org))
@@ -99,6 +102,7 @@ class Main(Thread):
                 if not self.rfid.rfid_queue.empty():
                     self.logger.debug('rfid queue non-empty, processing queue')
                     try:
+                        # get rfid from queue and look it up in all authentication APIs
                         self.current_uid = self.rfid.rfid_queue.get()
                         # look up the rfid as id: False if unknown, array of (credits, user, org) if rfid is known. If rfid is known, enable vending
                         id = self.uid_lookup(self.current_uid)
@@ -106,8 +110,9 @@ class Main(Thread):
                             (self.current_credits, self.current_user, self.current_org) = id
                             self.logger.info("rfid {} was found in {} with {} credits".format(self.current_uid, self.current_org, self.current_credits))
                             if self.current_credits > 0:
-                                self.mdbh.open_session = True
+                                self.mdbh.open_session = True # This allows the MDB reader to proceed with the vend
                             else:
+                                # send display request to the MDB reader and reset user data
                                 self.mdbh.display_queue.put({'top': 'Kein Guthaben', 'bot': ':\'(', 'duration': 3})
                                 (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
                         else:
@@ -119,12 +124,11 @@ class Main(Thread):
                         self.logger.exception("exception: {}".format(e))
                         continue
 
-                # sleep
+                # sleep to limit loop frequency
                 time.sleep(0.2)
 
         except KeyboardInterrupt:  # on CTRL-C, stop all threads and shut down
             self.stop('KeyboardInterrupt')
-
 
     # stop
     # INFO:     stop all threads and join them, log reason for shutdown
@@ -150,19 +154,19 @@ class Main(Thread):
         self.logger.info("SHUTDOWN FINALISED")
         sys.exit()
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # credits_available
+    # INFO:     Returns the amount of credits of the current user, so that the MDB reader can determine whether or not to proceed with the vend.
+    # ARGS:     slot_id (int) -> ID of the slot that was requested.
+    # RETURNS:  Available credits (int) of the user.
     def credits_available(self, slot_id):
         if self.current_credits > 0:
             return self.current_credits
         return 0
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # queue_vending
+    # INFO:     Appends a vend event to the vending queue to be reported to the corresponding API on the next iteration of the main loop.
+    # ARGS:     slot_id (int) -> ID of the slot that was requested.
+    # RETURNS:  -
     def queue_vending(self, slot_id):
         self.current_credits -= 1
         self.vending_queue.put((slot_id, self.current_uid, self.current_org))
@@ -208,7 +212,7 @@ class Main(Thread):
 
 
 
-#
+# MAIN EXECUTION
 # INFO:     run script as main, attach signal handling
 # ARGS:     /
 # RETURNS:  /
