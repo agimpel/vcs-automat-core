@@ -70,8 +70,6 @@ class MDB_Handler(Thread):
         # Default text shown on the vending machine
         self.default_display = {'top': 'VCS-Bierautomat', 'bottom': 'Legi einscannen', 'duration': 5}
 
-
-
     # exit
     # INFO:     Can be triggered from main thread to shut this thread down.
     # ARGS:     -
@@ -89,10 +87,13 @@ class MDB_Handler(Thread):
         self.is_running = True
 
         while self.is_running:
+            # Read data from MDB reader
             data = self.poll_data()
 
+            # Process data according to current state
             if data is not None:
 
+                # Only if the vending machine is polling and there is a display event requested, the display text can be send
                 if data == self.MDB_POLL and self.display_queue.empty() is False:
                     self.send_display_order(self.display_queue.get())
 
@@ -113,41 +114,36 @@ class MDB_Handler(Thread):
                     self.send_data(self.MDB_JUST_RESET)
                     self.logger.debug("OUT: Just reset")
 
+        # Force notifying the MDB reader about a shutdown of this thread
         self.__del__()
 
-
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # set_dispensed_callback
+    # INFO:     Is set by the main class to link to a function handling the reporting of a vend to the APIs.
+    # ARGS:     function (function) -> callback
+    # RETURNS:  -
     def set_dispensed_callback(self, function):
         self.dispensed_callback = function
 
-
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # set_available_callback
+    # INFO:     Is set by the main class to link to a function returning the amount of credits the current user has left.
+    # ARGS:     function (function) -> callback
+    # RETURNS:  -
     def set_available_callback(self, function):
         self.available_callback = function
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # poll_data
+    # INFO:     Reads the MDB reader and preprocesses the data frame for further use in this class.
+    # ARGS:     -
+    # RETURNS:  Either data (bytearray) if the reader sent a frame, or None otherwise.
     def poll_data(self):
+        # Read only first byte to see whether the reader actually sent a frame.
         s = self.ser.read(1)
         if s == self.MDB2PC_NAK:
             self.logger.debug("MDB2PC: [IN] NAK")
         if s == self.MDB2PC_ACK:
             self.logger.debug("MDB2PC: [IN] ACK")
         if s == self.MDB2PC_FRAME_START:
+            # Read the complete data frame and crop to the frame contents
             s = s + self.ser.read(10)
             start = s.find(self.MDB2PC_FRAME_BEGIN) + 2
             end = s.find(self.MDB2PC_FRAME_STOP, start)
@@ -158,23 +154,17 @@ class MDB_Handler(Thread):
             return data
         return None
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # send_data
+    # INFO:     Inserts data sent to the MDB reader into the data frame.
+    # ARGS:     data (bytearray) -> Data to be sent to the MDB reader
+    # RETURNS:  -
     def send_data(self, data):
         self.ser.write(self.MDB2PC_FRAME_BEGIN + data + self.MDB2PC_FRAME_STOP)
 
-
-
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # handle_data_reset
+    # INFO:     Processes the data sent from the MDB reader if the current state is RESET. It follows the general MDB protocol to start up the vending machine into the DISABLED state.
+    # ARGS:     data (bytearray) -> the preprocessed data sent from the MDB reader
+    # RETURNS:  -
     def handle_data_reset(self, data):
         self.logger.debug("STATE: RESET")
 
@@ -195,28 +185,26 @@ class MDB_Handler(Thread):
             self.send_data(self.MDB_OUT_OF_SEQUENCE)
             self.logger.debug("OUT: Out Of Sequence")
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # handle_data_disabled
+    # INFO:     Processes the data sent from the MDB reader if the current state is DISABLED. It follows the general MDB protocol, sending general information about the MDB reader to the vending machine to finalise preparation for the ENABLED state.
+    # ARGS:     data (bytearray) -> the preprocessed data sent from the MDB reader
+    # RETURNS:  -
     def handle_data_disabled(self, data):
         self.logger.debug("STATE: DISABLED")
 
-        if data == self.MDB_POLL:  # POLL
+        if data == self.MDB_POLL:
             self.logger.debug("IN: Poll")
             self.send_data(self.MDB_ACK)
             self.logger.debug("OUT: ACK")
 
-        elif data == self.MDB_RESET:  # RESET
+        elif data == self.MDB_RESET:
             self.logger.debug("IN: Reset")
             self.send_data(self.MDB_ACK)
             self.logger.debug("OUT: ACK")
             self.state = "RESET"
             self.logger.info("PROCEED TO: RESET")
 
-        elif data == self.MDB_READER_SETUP_CONFIG:  # SETUP CONFIG
+        elif data == self.MDB_READER_SETUP_CONFIG:
             self.logger.debug("IN: Setup Config")
             self.send_data(self.MDB_READER_CONFIG_RESPONSE)
             self.logger.debug("OUT: Reader Config Response")
@@ -243,12 +231,10 @@ class MDB_Handler(Thread):
             self.send_data(self.MDB_OUT_OF_SEQUENCE)
             self.logger.debug("OUT: Out Of Sequence")
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # handle_data_enabled
+    # INFO:     Processes the data sent from the MDB reader if the current state is ENABLED. It follows the general MDB protocol to initiate the 
+    # ARGS:     data (bytearray) -> the preprocessed data sent from the MDB reader
+    # RETURNS:  -
     def handle_data_enabled(self, data):
         self.logger.debug("STATE: ENABLED")
 
