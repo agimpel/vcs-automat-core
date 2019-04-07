@@ -66,7 +66,7 @@ class MDB_Handler(Thread):
         self.display_timeout = 0
         self.dispensed_callback = None
         self.available_callback = None
-        self.last_amount = 0
+        self.last_amount = 0 # amount of credits left for user
 
         self.default_display = {'top': 'VCS-Bierautomat', 'bot': 'Legi einscannen', 'duration': 1}
 
@@ -236,14 +236,15 @@ class MDB_Handler(Thread):
             self.logger.debug("OUT: Out Of Sequence")
 
     # handle_data_enabled
-    # INFO:     Processes the data sent from the MDB reader if the current state is ENABLED. It follows the general MDB protocol to initiate the 
+    # INFO:     Processes the data sent from the MDB reader if the current state is ENABLED. It follows the general MDB protocol to initiate the SESSION state used for vending.
     # ARGS:     data (bytearray) -> the preprocessed data sent from the MDB reader
     # RETURNS:  -
     def handle_data_enabled(self, data):
         self.logger.debug("STATE: ENABLED")
 
-        if data == self.MDB_POLL:  # POLL
+        if data == self.MDB_POLL:
             self.logger.debug("IN: Poll")
+            # if the open_session flag is set to True, the vending machine should start a vending session. Otherwise, the default display text is displayed.
             if self.open_session:
                 self.open_session = False
                 self.timer = time.time()
@@ -261,7 +262,7 @@ class MDB_Handler(Thread):
             self.send_data(self.MDB_ACK)
             self.logger.debug("OUT: ACK")
 
-        elif data == self.MDB_RESET:  # RESET
+        elif data == self.MDB_RESET:
             self.logger.debug("IN: Reset")
             self.send_data(self.MDB_ACK)
             self.logger.debug("OUT: ACK")
@@ -273,24 +274,25 @@ class MDB_Handler(Thread):
             self.send_data(self.MDB_OUT_OF_SEQUENCE)
             self.logger.debug("OUT: Out Of Sequence")
 
-
-    
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # handle_data_session
+    # INFO:     Processes the data sent from the MDB reader if the current state is SESSION. It follows the general MDB protocol to handle the vending including any cancellation processes. The SESSION state is divided into multiple substates that correspond to the position within the vend process. The substates are not part of the standard MDB protocol, but are added to reduce complexity.
+    # ARGS:     data (bytearray) -> the preprocessed data sent from the MDB reader
+    # RETURNS:  -
     def handle_data_session(self, data):
 
+        # If the program entered the SESSION state just yet, the substate is set to None.
         if self.substate == None:
             self.logger.debug("STATE: SESSION")
 
-            if data == self.MDB_POLL:  # POLL
+            # As long as the timeout is not reached, a new display text is shown on the vending machine. After the timeout, the session is cancelled
+            if data == self.MDB_POLL:
                 self.logger.debug("IN: Poll")
                 if time.time() - self.timer > self.TIMEOUT:
                     self.substate = "SESSION CANCEL"
                 else:
                     self.send_display_order({'top': 'Slot aussuchen','bot': 'Guthaben: ' + str(self.last_amount), 'duration': 5})
 
+            # If a vend is requested (a selection button was pressed), read the amount of credits of user via callback and either approve or cancel vend
             elif data[0:2] == self.MDB_VEND_REQUEST:
                 self.logger.debug("IN: Vend Request")
                 self.slot = struct.unpack('>H', data[4:6])[0]
@@ -312,7 +314,7 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: Cancel Request")
                 self.substate = "SESSION END"
 
-            elif data == self.MDB_RESET:  # RESET
+            elif data == self.MDB_RESET:
                 self.logger.debug("IN: Reset")
                 self.send_data(self.MDB_ACK)
                 self.logger.debug("OUT: ACK")
@@ -330,7 +332,7 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
                 self.logger.debug("OUT: Out Of Sequence")
 
-        
+        # A VEND CANCEL substate indicates the vend was stopped either by the program or the user. No vend should be reported, as no drink was released.
         elif self.substate == "VEND CANCEL":
             self.logger.debug("STATE: VEND CANCEL")
 
@@ -364,7 +366,7 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
                 self.logger.debug("OUT: Out Of Sequence")
 
-
+        # A VEND APPROVED substate indicates the user has sufficient credits and the vend can be performed
         elif self.substate == "VEND APPROVED":
             self.logger.debug("STATE: VEND APPROVED")
 
@@ -373,6 +375,7 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_ACK)
                 self.logger.debug("OUT: ACK")
 
+            # The drink was released, report vend to APIs
             elif data[0:2] == self.MDB_VEND_SUCCESFUL:
                 self.logger.debug("IN: Vend Success")
                 self.dispensed_callback(self.slot)
@@ -386,7 +389,7 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: Cancel Request")
                 self.substate = "SESSION END"
 
-            elif data == self.MDB_RESET:  # RESET
+            elif data == self.MDB_RESET:
                 self.logger.debug("IN: Reset")
                 self.send_data(self.MDB_ACK)
                 self.logger.debug("OUT: ACK")
@@ -405,8 +408,7 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
                 self.logger.debug("OUT: Out Of Sequence")
 
-
-
+        # Either due to successfull vend or a cancellation, the SESSION CANCEL substate negotiates the return to the ENABLED state to the vending machine.
         elif self.substate == "SESSION CANCEL":
             self.logger.debug("STATE: SESSION CANCEL")
 
@@ -416,6 +418,7 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: Cancel Request")
                 self.substate = "SESSION END"
 
+            # Sending MDB_SESSION_COMPLETE forces the vending machine to stop its session, leading to it polling.
             elif data == self.MDB_SESSION_COMPLETE:
                 self.logger.debug("IN: Session Complete")
                 self.send_data(self.MDB_ACK)
@@ -426,7 +429,7 @@ class MDB_Handler(Thread):
                 self.send_data(self.MDB_OUT_OF_SEQUENCE)
                 self.logger.debug("OUT: Out Of Sequence")
 
-
+        # After the closing of the session is negotiated, the SESSION END substate performs the switch to the ENABLED state
         elif self.substate == "SESSION END":
             self.logger.debug("STATE: SESSION END")
 
@@ -452,54 +455,59 @@ class MDB_Handler(Thread):
 
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # send_display_order
+    # INFO:     Queues a display request to show text on the vending machine's display. The request consists of two lines of text and a duration for which the text should be shown. If the priority flag is set to True, the text is displayed even if another text's duration is not yet reached.
+    # ARGS:     request (array) -> content of the display request: top line, bottom line and duration; priority (bool, optional) whether to overwrite existing text
+    # RETURNS:  -
     def send_display_order(self, request, priority = False):
 
-        try:
-            if priority is False and self.display_timeout > time.time():
-                self.send_data(self.MDB_ACK)
-                self.logger.debug("OUT: ACK")
-                return
+        # Check if previous text is not finished or the new display request is not prioritized. If so, just send ACK and nothing happens.
+        if priority is False and self.display_timeout > time.time():
+            self.send_data(self.MDB_ACK)
+            self.logger.debug("OUT: ACK")
+            return
 
-            lines = [str(request['top']), str(request['bot'])]
-            duration = int(request['duration'])
+        # Preprocess array contents
+        lines = [str(request['top']), str(request['bot'])]
+        duration = int(request['duration'])
 
-            if duration > 25: duration = 25
-            if duration < 0.1: duration = 0.1
+        # Max duration is 25s, min duration is 0.1s
+        if duration > 25: duration = 25
+        if duration < 0.1: duration = 0.1
 
-            self.display_timeout = time.time() + duration - 0.9
-            
-            for line in range(0,len(lines)):
-                if len(lines[line]) < 16:
-                    missing = 16 - len(lines[line])
-                    added_in_front = int(missing/2)
-                    added_in_back = missing - added_in_front
-                    lines[line] = added_in_front*' '+lines[line]+added_in_back*' '
-                if len(lines[line]) > 16:
-                    lines[line] = lines[line][0:16]
+        # Save timeout of current text. Shorten it by almost one second, as this is roughly the time between POLLs of the MDB reader
+        self.display_timeout = time.time() + duration - 0.9
+        
+        # Build text lines (max 16 chars) by centering the individual lines
+        for line in range(0,len(lines)):
+            if len(lines[line]) < 16:
+                missing = 16 - len(lines[line])
+                added_in_front = int(missing/2)
+                added_in_back = missing - added_in_front
+                lines[line] = added_in_front*' '+lines[line]+added_in_back*' '
+            if len(lines[line]) > 16:
+                lines[line] = lines[line][0:16]
 
-            duration_byte = bytearray(1)
-            duration_byte[0] = int(duration*10)
-            duration_byte = bytes(duration_byte)
+        # Build the data to be sent to the MDB reader, see MDB documentation for formatting
+        duration_byte = bytearray(1)
+        duration_byte[0] = int(duration*10)
+        duration_byte = bytes(duration_byte)
 
-            line1 = bytes(lines[0].encode('utf8'))
-            line2 = bytes(lines[1].encode('utf8'))
+        # encode lines into bytes. Check encoding for issues with Umlauts
+        line1 = bytes(lines[0].encode('utf8'))
+        line2 = bytes(lines[1].encode('utf8'))
 
-            self.send_data(self.MDB_DISPLAY_REQUEST + duration_byte + line1 + line2)
-            self.logger.debug("OUT: Display Request")
-
-        except Exception as e:
-            self.logger.exception(e)
-
+        # Send display request to MDB reader
+        self.send_data(self.MDB_DISPLAY_REQUEST + duration_byte + line1 + line2)
+        self.logger.debug("OUT: Display Request")
 
 
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+
+
+    # __del__
+    # INFO:     Informs the vending machine about the shutdown and gracefully kills the connection to the MDB reader.
+    # ARGS:     -
+    # RETURNS:  -
     def __del__(self):
         # send session_complete after poll
         self.logger.debug("Closing connection!")
