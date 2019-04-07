@@ -83,6 +83,10 @@ class Main(Thread):
         try:
             while self.is_running:
 
+                if self.tbot.shutdown:
+                    self.stop(reason = "Internal Signal")
+                    return
+
                 # first queue: vending
                 if not self.vending_queue.empty():
                     self.logger.debug('vending queue non-empty, processing queue')
@@ -116,7 +120,8 @@ class Main(Thread):
                                 self.mdbh.display_queue.put({'top': 'Kein Guthaben', 'bot': ':\'(', 'duration': 3})
                                 (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
                         else:
-                            self.logger.error("rfid {} was unknown, dismissing".format(self.current_uid))
+                            self.mdbh.display_queue.put({'top': 'Legi/Benutzer', 'bot': 'unbekannt', 'duration': 3})
+                            self.logger.info("rfid {} was unknown, dismissing".format(self.current_uid))
                             (self.current_credits, self.current_user, self.current_org) = (0, User(), 'undefined')
                             self.mdbh.open_session = False
 
@@ -170,8 +175,7 @@ class Main(Thread):
     def queue_vending(self, slot_id):
         self.current_credits -= 1
         self.vending_queue.put((slot_id, self.current_uid, self.current_org))
-        if self.current_credits > 0:
-            self.mdbh.open_session = True
+        self.tbot.update_fillstatus_callback(slot_id)
 
     # uid_lookup
     # INFO:     looks up 'rfid' from RFID reader in all identification providers and returns info on user, available credits and the authenticating organisation
@@ -198,13 +202,13 @@ class Main(Thread):
             if user is not None:
                 org = id_provider.orgname
                 credits = user.credits
-                self.logger.info('rfid %s matched from %s with %d credits', rfid, org, credits)
+                self.logger.debug('rfid %s matched from %s with %d credits', rfid, org, credits)
                 if best_result[0] is None or best_result[0] < credits:
                     best_result = (credits, user, org)
 
         # return False if the user is unknown or the result with the highest number of available credits if user is known
         if best_result[1] is None:
-            self.logger.error('rfid %s had no match', rfid)
+            self.logger.info('rfid %s had no match', rfid)
             return False
         else:
             self.logger.info('rfid %s matched from %s with %d credits as best result', best_result[1].rfid, best_result[2], best_result[0])

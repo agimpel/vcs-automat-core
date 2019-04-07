@@ -105,13 +105,13 @@ class RFID_Reader(Thread):
 
     def validate(self, raw_input):
         if len(raw_input) < 50:
-            self.logger.debug('Input was too short.')
+            self.logger.info('Input was too short.')
             return False
         if raw_input[0:5] != 'LEGIC':
-            self.logger.debug('RFID is not of type LEGIC, got '+str(raw_input[0:5]))
+            self.logger.info('RFID is not of type LEGIC, got '+str(raw_input[0:5]))
             return False
         if raw_input[self.stamp_index:self.stamp_index+len(self.stamp)] != self.stamp:
-            self.logger.debug('RFID stamp was not correct, got '+str(raw_input[self.stamp_index:self.stamp_index+len(self.stamp)]))
+            self.logger.info('RFID stamp was not correct, got '+str(raw_input[self.stamp_index:self.stamp_index+len(self.stamp)]))
             return False
 
         self.logger.debug('RFID was valid.')

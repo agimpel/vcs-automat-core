@@ -63,12 +63,12 @@ class MDB_Handler(Thread):
         self.state = "RESET"
         self.substate = None
         self.display_queue = queue.Queue()
+        self.display_timeout = 0
         self.dispensed_callback = None
         self.available_callback = None
         self.last_amount = 0
 
-        # Default text shown on the vending machine
-        self.default_display = {'top': 'VCS-Bierautomat', 'bottom': 'Legi einscannen', 'duration': 5}
+        self.default_display = {'top': 'VCS-Bierautomat', 'bot': 'Legi einscannen', 'duration': 1}
 
     # exit
     # INFO:     Can be triggered from main thread to shut this thread down.
@@ -87,6 +87,9 @@ class MDB_Handler(Thread):
         self.is_running = True
 
         while self.is_running:
+            # Sleep to prevent timing issues with the MDB reader
+            time.sleep(0.1)
+
             # Read data from MDB reader
             data = self.poll_data()
 
@@ -95,7 +98,7 @@ class MDB_Handler(Thread):
 
                 # Only if the vending machine is polling and there is a display event requested, the display text can be send
                 if data == self.MDB_POLL and self.display_queue.empty() is False:
-                    self.send_display_order(self.display_queue.get())
+                    self.send_display_order(self.display_queue.get(), priority = True)
 
                 elif self.state == "RESET":
                     self.handle_data_reset(data)
@@ -160,6 +163,7 @@ class MDB_Handler(Thread):
     # RETURNS:  -
     def send_data(self, data):
         self.ser.write(self.MDB2PC_FRAME_BEGIN + data + self.MDB2PC_FRAME_STOP)
+        self.ser.flush()
 
     # handle_data_reset
     # INFO:     Processes the data sent from the MDB reader if the current state is RESET. It follows the general MDB protocol to start up the vending machine into the DISABLED state.
@@ -246,6 +250,9 @@ class MDB_Handler(Thread):
                 self.last_amount = self.available_callback(0)
                 self.send_data(self.MDB_OPEN_SESSION)
                 self.logger.debug("OUT: Open Session")
+                self.state = "SESSION"
+                self.substate = None
+                self.logger.info("PROCEED TO: SESSION")
             else:
                 self.send_display_order(self.default_display)
 
@@ -280,9 +287,9 @@ class MDB_Handler(Thread):
             if data == self.MDB_POLL:  # POLL
                 self.logger.debug("IN: Poll")
                 if time.time() - self.timer > self.TIMEOUT:
-                    self.substate = "SESSION END"
+                    self.substate = "SESSION CANCEL"
                 else:
-                    self.send_display_order({'top': 'Getränk wählen','bot': 'Guthaben: ' + str(self.last_amount), 'duration': 2})
+                    self.send_display_order({'top': 'Slot aussuchen','bot': 'Guthaben: ' + str(self.last_amount), 'duration': 5})
 
             elif data[0:2] == self.MDB_VEND_REQUEST:
                 self.logger.debug("IN: Vend Request")
@@ -292,24 +299,18 @@ class MDB_Handler(Thread):
                     self.logger.info("Request Approved, " + str(self.last_amount - 1) + " credits left")
                     self.send_data(self.MDB_VEND_APPROVED)
                     self.logger.debug("OUT: Vend Approved")
+                    self.substate = "VEND APPROVED"
                 else:
                     self.logger.info("Request Denied")
                     self.send_data(self.MDB_VEND_DENIED)
                     self.logger.debug("OUT: Vend Denied")
-
-            elif data[0:2] == self.MDB_VEND_SUCCESFUL:
-                self.logger.debug("IN: Vend Success")
-                self.dispensed_callback(self.slot)
-                self.send_data(self.MDB_CANCEL_REQUEST)
-                self.logger.debug("OUT: Cancel Request")
-                self.substate = "SESSION END"
+                    self.substate = "VEND CANCEL"
 
             elif data[0:2] == self.MDB_VEND_CANCEL: # User put in coins
                 self.logger.debug("IN: Vend Cancel")
-                self.send_data(self.MDB_VEND_DENIED)
-                self.logger.debug("OUT: Vend Denied")
-                self.state = "ENABLED"
-                self.logger.info("PROCEED TO: ENABLED")
+                self.send_data(self.MDB_CANCEL_REQUEST)
+                self.logger.debug("OUT: Cancel Request")
+                self.substate = "SESSION END"
 
             elif data == self.MDB_RESET:  # RESET
                 self.logger.debug("IN: Reset")
@@ -330,17 +331,74 @@ class MDB_Handler(Thread):
                 self.logger.debug("OUT: Out Of Sequence")
 
         
-        elif self.substate == "SESSION END":
-            self.logger.debug("STATE: SESSION END")
-            self.substate = None
+        elif self.substate == "VEND CANCEL":
+            self.logger.debug("STATE: VEND CANCEL")
 
             if data == self.MDB_POLL:
                 self.logger.debug("IN: Poll")
-                self.send_data(self.MDB_END_SESSION)
-                self.logger.debug("OUT: End Session")
-                self.state = "ENABLED"
-                self.logger.info("PROCEED TO: ENABLED")
-                self.display_queue.put({'top': 'VCS', 'bot': '<3','duration': 3})
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+
+            elif data[0:2] == self.MDB_VEND_CANCEL: # User put in coins
+                self.logger.debug("IN: Vend Cancel")
+                self.send_data(self.MDB_CANCEL_REQUEST)
+                self.logger.debug("OUT: Cancel Request")
+                self.substate = "SESSION END"
+
+            elif data == self.MDB_RESET:  # RESET
+                self.logger.debug("IN: Reset")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+                self.state = "RESET"
+                self.logger.info("PROCEED TO: RESET")
+                self.substate = None
+
+            elif data == self.MDB_SESSION_COMPLETE:
+                self.logger.debug("IN: Session Complete")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+                self.substate = "SESSION END"
+
+            else:
+                self.logger.info("IN: Unhandled Frame " + str(binascii.hexlify(data)))
+                self.send_data(self.MDB_OUT_OF_SEQUENCE)
+                self.logger.debug("OUT: Out Of Sequence")
+
+
+        elif self.substate == "VEND APPROVED":
+            self.logger.debug("STATE: VEND APPROVED")
+
+            if data == self.MDB_POLL:
+                self.logger.debug("IN: Poll")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+
+            elif data[0:2] == self.MDB_VEND_SUCCESFUL:
+                self.logger.debug("IN: Vend Success")
+                self.dispensed_callback(self.slot)
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+                self.substate = "SESSION CANCEL"
+
+            elif data[0:2] == self.MDB_VEND_CANCEL: # User put in coins
+                self.logger.debug("IN: Vend Cancel")
+                self.send_data(self.MDB_CANCEL_REQUEST)
+                self.logger.debug("OUT: Cancel Request")
+                self.substate = "SESSION END"
+
+            elif data == self.MDB_RESET:  # RESET
+                self.logger.debug("IN: Reset")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+                self.state = "RESET"
+                self.logger.info("PROCEED TO: RESET")
+                self.substate = None
+
+            elif data == self.MDB_SESSION_COMPLETE:
+                self.logger.debug("IN: Session Complete")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+                self.substate = "SESSION END"
 
             else:
                 self.logger.info("IN: Unhandled Frame " + str(binascii.hexlify(data)))
@@ -349,36 +407,93 @@ class MDB_Handler(Thread):
 
 
 
+        elif self.substate == "SESSION CANCEL":
+            self.logger.debug("STATE: SESSION CANCEL")
+
+            if data == self.MDB_POLL:
+                self.logger.debug("IN: Poll")
+                self.send_data(self.MDB_CANCEL_REQUEST)
+                self.logger.debug("OUT: Cancel Request")
+                self.substate = "SESSION END"
+
+            elif data == self.MDB_SESSION_COMPLETE:
+                self.logger.debug("IN: Session Complete")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+
+            else:
+                self.logger.info("IN: Unhandled Frame " + str(binascii.hexlify(data)))
+                self.send_data(self.MDB_OUT_OF_SEQUENCE)
+                self.logger.debug("OUT: Out Of Sequence")
+
+
+        elif self.substate == "SESSION END":
+            self.logger.debug("STATE: SESSION END")
+
+            if data == self.MDB_POLL:
+                self.logger.debug("IN: Poll")
+                self.send_data(self.MDB_END_SESSION)
+                self.logger.debug("OUT: End Session")
+                self.state = "ENABLED"
+                self.logger.info("PROCEED TO: ENABLED")
+                self.substate = None
+                self.display_queue.put({'top': 'VCS', 'bot': '<3', 'duration': 3})
+
+            elif data == self.MDB_SESSION_COMPLETE:
+                self.logger.debug("IN: Session Complete")
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+
+            else:
+                self.logger.info("IN: Unhandled Frame " + str(binascii.hexlify(data)))
+                self.send_data(self.MDB_OUT_OF_SEQUENCE)
+                self.logger.debug("OUT: Out Of Sequence")
+
+
+
+
     # name
     # INFO:
     # ARGS:
     # RETURNS:
-    def send_display_order(self, request):
-        line1 = str(request['top'])
-        line2 = str(request['bot'])
-        duration = int(request['duration'])
+    def send_display_order(self, request, priority = False):
 
-        if duration > 25: duration = 25
-        if duration < 1: duration = 1
-        
-        for line in (line1, line2):
-            if len(line) < 16:
-                missing = 16 - len(line)
-                added_in_front = int(missing/2)
-                added_in_back = missing - added_in_front
-                line = added_in_front*' '+line+added_in_back*' '
-            if len(line) > 16:
-                line = line[0:16]
+        try:
+            if priority is False and self.display_timeout > time.time():
+                self.send_data(self.MDB_ACK)
+                self.logger.debug("OUT: ACK")
+                return
 
-        duration_byte = bytearray(1)
-        duration_byte[0] = duration*10
-        duration_byte = bytes(duration_byte)
+            lines = [str(request['top']), str(request['bot'])]
+            duration = int(request['duration'])
 
-        line1 = bytes(line1.encode('utf8'))
-        line2 = bytes(line2.encode('utf8'))
+            if duration > 25: duration = 25
+            if duration < 0.1: duration = 0.1
 
-        self.send_data(self.MDB_DISPLAY_REQUEST + duration_byte + line1 + line2)
-        self.logger.debug("OUT: Display Request")
+            self.display_timeout = time.time() + duration - 0.9
+            
+            for line in range(0,len(lines)):
+                print(len(lines[line]))
+                if len(lines[line]) < 16:
+                    missing = 16 - len(lines[line])
+                    added_in_front = int(missing/2)
+                    added_in_back = missing - added_in_front
+                    lines[line] = added_in_front*' '+lines[line]+added_in_back*' '
+                if len(lines[line]) > 16:
+                    lines[line] = lines[line][0:16]
+
+            duration_byte = bytearray(1)
+            duration_byte[0] = int(duration*10)
+            duration_byte = bytes(duration_byte)
+
+            line1 = bytes(lines[0].encode('utf8'))
+            line2 = bytes(lines[1].encode('utf8'))
+
+            self.send_data(self.MDB_DISPLAY_REQUEST + duration_byte + line1 + line2)
+            self.logger.debug("OUT: Display Request")
+
+        except Exception as e:
+            self.logger.exception(e)
 
 
 

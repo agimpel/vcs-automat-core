@@ -57,6 +57,7 @@ class Telegram_Bot(Thread):
 
         Thread.__init__(self, daemon=True)
         self.is_running = False
+        self.shutdown = False
 
 
     # run
@@ -132,6 +133,7 @@ class Telegram_Bot(Thread):
         # admin only commands
         self.tbot_dp.add_handler(RegexHandler("(Administratives)", self.admin_panel))
         self.tbot_dp.add_handler(RegexHandler("(Datenbanken aktualisieren)", self.reload_databases))
+        self.tbot_dp.add_handler(RegexHandler("(Automat neustarten)", self.restart_service))
         self.tbot_dp.add_handler(RegexHandler("(Zurück zur Übersicht)", self.default_state))
 
 
@@ -186,6 +188,9 @@ class Telegram_Bot(Thread):
 
         db.execute("INSERT INTO users (ID, rfid) VALUES ('"+str(id)+"','"+str(rfid)+"')")
         db_connector.commit()
+
+        db.execute('SELECT * FROM users')
+        self.users_rfid = {item[0]: item[1] for item in db.fetchall()}
 
         db_connector.close()
         self.logger.info('ID '+str(id)+ ' with RFID '+str(rfid)+' successfully registered in database.')
@@ -307,7 +312,7 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def admin_keyboard(self):
-        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Datenbanken aktualisieren'], ['Zurück zur Übersicht']]
+        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Datenbanken aktualisieren'], ['Automat neustarten'], ['Zurück zur Übersicht']]
         return ReplyKeyboardMarkup(keyboard)
 
     # name
@@ -472,7 +477,7 @@ class Telegram_Bot(Thread):
         else:
             conn = VCS_ID()
             data = conn.auth(rfid)
-            if data is False:
+            if data is None:
                 update.message.reply_text('Deine RFID ist unbekannt oder ein Fehler ist aufgetreten.')
                 self.logger.error('RFID '+str(rfid)+' was either unknown or there was an error.')
                 self.default_state(bot, update)
@@ -502,7 +507,7 @@ class Telegram_Bot(Thread):
 
         self.users_rfid[update.effective_user.id] = raw_rfid
         self.rfid_data[raw_rfid] = {'credits': 0, 'timestamp': 0}
-        self.register_user_in_db(os.path.join(DB, "tbot.db"), update.effective_user.id, raw_rfid)
+        self.register_user_in_db(update.effective_user.id, raw_rfid)
         update.message.reply_text('Die Identifikationsnummer wurde erfolgreich gespeichert!')
         return self.credits_entry(bot, update)
 
@@ -769,6 +774,21 @@ class Telegram_Bot(Thread):
         self.initialise_db()
         update.message.reply_text('Datenbanken werden neu gelesen.')
         self.admin_panel(bot, update)
+
+
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    @admin_only
+    def restart_service(self, bot, update):
+        # Program will restart due to system service manager restarting the service after its timeout
+        update.message.reply_text('Automat wird neu gestartet. Bitte etwas Geduld.')
+        self.admin_panel(bot, update)
+        self.logger.warning('Restart was initiated. Will shut down process now.')
+        self.shutdown = True
+        self.is_running = False
 
 
 
