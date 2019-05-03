@@ -387,10 +387,12 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def check_fill_status(self, bot, update):
-        string = 'Momentaner Füllstand:\n\n'+''.join('Slot '+str(slot-self.slot_offset)+': '+str(slot_dict['amount'])+'/'+str(slot_dict['max_amount'])+'\n' if slot in self.active_slots for slot, slot_dict in self.automat_content.items())
+        string = 'Momentaner Füllstand:\n\n'
+        for slot, slot_dict in self.automat_content.items():
+            if slot in self.active_slots:
+                string += 'Slot '+str(slot-self.slot_offset)+': '+str(slot_dict['amount'])+'/'+str(slot_dict['max_amount'])+'\n'
         update.message.reply_text(string)
         self.default_state(bot, update)
-
 
     # name
     # INFO:
