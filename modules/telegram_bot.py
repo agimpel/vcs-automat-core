@@ -138,7 +138,7 @@ class Telegram_Bot(Thread):
         self.tbot_dp.add_handler(RegexHandler("(Datenbanken aktualisieren)", self.reload_databases))
         self.tbot_dp.add_handler(RegexHandler("(Automat neustarten)", self.restart_service))
         self.tbot_dp.add_handler(RegexHandler("(Zurück zur Übersicht)", self.default_state))
-        self.tbot_dp.add_handler(CommandHandler("answer", self.answer_report, pass_args=True))
+        self.tbot_dp.add_handler(CommandHandler("send", self.answer_report, pass_args=True))
 
         # fallback command
         self.tbot_dp.add_handler(RegexHandler(".*", self.help))
@@ -431,7 +431,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     def report_text(self, bot, update):
         update.message.reply_text('Deine Meldung wurde übermittelt!', reply_markup = ReplyKeyboardRemove())
-        bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}\n\nBeantworten mit \answer {} <TEXT>'.format(self.get_name(update), update.effective_user.id, update.message.date, update.message.text, update.effective_user.id), disable_notification=True)
+        bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}\n\nBeantworten mit \\send {} <TEXT>'.format(self.get_name(update), update.effective_user.id, update.message.date, update.message.text, update.effective_user.id), disable_notification=True)
         self.save_report_in_db(update.message.text, update.effective_user.id)
         self.default_state(bot, update)
         return ConversationHandler.END
