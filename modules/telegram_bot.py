@@ -38,6 +38,9 @@ class Telegram_Bot(Thread):
     # at which remaining content levels to notify the admin group (relative to maximal amount). Note: at 0, there is always an automatic notification
     notification_content_levels = [0.25, 0.10, 0.05, 0.00] # at 25%, 10%, 5% and 0%
 
+    # define which slots are shown by the telegram bot and define the offset for the shown number (bot will show slot_number - slot_offset)
+    active_slots = [3, 4, 5, 6, 7, 8]
+    slot_offset = 2
 
     # __init__
     # INFO:     Sets up logging and paths for config and database files, then reads them and starts the thread (using SQLite3)
@@ -59,7 +62,6 @@ class Telegram_Bot(Thread):
         self.is_running = False
         self.shutdown = False
 
-
     # run
     # INFO:     Main loop of the telegram bot. All handlers for commands are registered here.
     # ARGS:     /
@@ -72,7 +74,7 @@ class Telegram_Bot(Thread):
         self.tbot_jq = self.tbot_up.job_queue
 
 
-        # general conversation handlers
+        # general conversation handler: Reporting
         report_handler = ConversationHandler(
             entry_points = [RegexHandler('(Problem melden)', self.report_entry)],
             states = {
@@ -82,6 +84,7 @@ class Telegram_Bot(Thread):
         )
         self.tbot_dp.add_handler(report_handler)
 
+        # general conversation handler: Credit Check
         credits_handler = ConversationHandler(
             entry_points = [RegexHandler('(Guthaben überprüfen)', self.credits_entry)],
             states = {
@@ -91,14 +94,13 @@ class Telegram_Bot(Thread):
         )
         self.tbot_dp.add_handler(credits_handler)
 
-
         # general commands
         self.tbot_dp.add_handler(CommandHandler("start", self.on_start))
         self.tbot_dp.add_handler(RegexHandler("(Hilfe)", self.help))
         self.tbot_dp.add_handler(RegexHandler("(Füllstand überprüfen)", self.check_fill_status))
         self.tbot_dp.add_handler(RegexHandler("(Allgemeine Informationen anzeigen)", self.get_api_info))
 
-        # admin only conversation handlers
+        # admin only conversation handler: Set Amount
         amount_handler = ConversationHandler(
             entry_points = [RegexHandler('(Füllstand ändern)', self.amount_entry)],
             states = {
@@ -109,6 +111,7 @@ class Telegram_Bot(Thread):
         )
         self.tbot_dp.add_handler(amount_handler)
 
+        # admin only conversation handler: Set Max-Amount
         maxamount_handler = ConversationHandler(
             entry_points = [RegexHandler('(Maximalmengen ändern)', self.maxamount_entry)],
             states = {
@@ -119,6 +122,7 @@ class Telegram_Bot(Thread):
         )
         self.tbot_dp.add_handler(maxamount_handler)
 
+        # admin only conversation handler: Ban User
         ban_handler = ConversationHandler(
             entry_points = [RegexHandler('(User bannen)', self.ban_entry)],
             states = {
@@ -129,13 +133,12 @@ class Telegram_Bot(Thread):
         )
         self.tbot_dp.add_handler(ban_handler)
 
-
         # admin only commands
         self.tbot_dp.add_handler(RegexHandler("(Administratives)", self.admin_panel))
         self.tbot_dp.add_handler(RegexHandler("(Datenbanken aktualisieren)", self.reload_databases))
         self.tbot_dp.add_handler(RegexHandler("(Automat neustarten)", self.restart_service))
         self.tbot_dp.add_handler(RegexHandler("(Zurück zur Übersicht)", self.default_state))
-
+        self.tbot_dp.add_handler(CommandHandler("send", self.answer_report, pass_args=True))
 
         # fallback command
         self.tbot_dp.add_handler(RegexHandler(".*", self.help))
@@ -156,7 +159,6 @@ class Telegram_Bot(Thread):
         # signal shutdown
         self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-Bot Thread wurde gestoppt.', disable_notification=True)
 
-
     # exit
     # INFO:     Stops the telegram bot thread.
     # ARGS:     /
@@ -164,7 +166,6 @@ class Telegram_Bot(Thread):
     def exit(self):
         self.logger.info("SHUTDOWN")
         self.is_running = False
-
 
     # read_cfg
     # INFO:     Reads the configuration file for the telegram bot. Read values are the Telegram API key and the ID of the admin group.
@@ -176,7 +177,6 @@ class Telegram_Bot(Thread):
         self.telegram_api_key = str(config['telegram']['api_key'])
         self.admin_group_id = int(config['telegram']['admin_group_id'])
         self.logger.info('config loaded')
-
 
     # register_user_in_db
     # INFO:     Saves a relationship between Telegram ID, which is visible to the telegram bot, and RFID, which is necessary for authentication against the VCS API in the database.
@@ -195,7 +195,6 @@ class Telegram_Bot(Thread):
         db_connector.close()
         self.logger.info('ID '+str(id)+ ' with RFID '+str(rfid)+' successfully registered in database.')
         return True
-
 
     # set_amount_in_db
     # INFO:     Assing a content amount or the maximum available content amount of a slot to save in the database. amount is expected to be within [0, max_amount]
@@ -218,7 +217,6 @@ class Telegram_Bot(Thread):
         db_connector.close()
         return True
 
-
     # ban_user_in_db
     # INFO:
     # ARGS:
@@ -233,7 +231,6 @@ class Telegram_Bot(Thread):
 
         db_connector.close()
         return True
-
 
     # name
     # INFO:
@@ -273,7 +270,6 @@ class Telegram_Bot(Thread):
         db_connector.close()
         self.logger.info('database loaded')
 
-
     # name
     # INFO:
     # ARGS:
@@ -288,7 +284,6 @@ class Telegram_Bot(Thread):
             return func(self, bot, update, *args, **kwargs)
         return wrapped
 
-
     # name
     # INFO:
     # ARGS:
@@ -297,7 +292,6 @@ class Telegram_Bot(Thread):
         keyboard = [['Allgemeine Informationen anzeigen'],['Guthaben überprüfen', 'Füllstand überprüfen'], ['Problem melden', 'Hilfe']]
         return ReplyKeyboardMarkup(keyboard)
 
-
     # name
     # INFO:
     # ARGS:
@@ -305,7 +299,6 @@ class Telegram_Bot(Thread):
     def default_keyboard_for_admins(self):
         keyboard = [['Allgemeine Informationen anzeigen'],['Guthaben überprüfen', 'Füllstand überprüfen'], ['Problem melden', 'Hilfe'], ['Administratives']]
         return ReplyKeyboardMarkup(keyboard)
-
 
     # name
     # INFO:
@@ -335,7 +328,6 @@ class Telegram_Bot(Thread):
         else:
             update.message.reply_text('Was kann ich für dich tun?', reply_markup = self.default_keyboard())
 
-
     # name
     # INFO:
     # ARGS:
@@ -343,9 +335,6 @@ class Telegram_Bot(Thread):
     @admin_only
     def admin_panel(self, bot, update):
         update.message.reply_text('Wähle eine administrative Option:', reply_markup = self.admin_keyboard())
-
-
-
 
     # name
     # INFO:
@@ -393,17 +382,17 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Hallo {}!\nIch bin ein Bot für den VCS-Bierautomaten. Bei Fragen & Feedback wende dich an bierko@vcs.ethz.ch.\n{}'.format(name, help_text))
         self.default_state(bot, update)
 
-
     # name
     # INFO:
     # ARGS:
     # RETURNS:
     def check_fill_status(self, bot, update):
-        string = 'Momentaner Füllstand:\n\n'+''.join('Slot '+str(slot)+': '+str(slot_dict['amount'])+'/'+str(slot_dict['max_amount'])+'\n' for slot, slot_dict in self.automat_content.items())
+        string = 'Momentaner Füllstand:\n\n'
+        for slot, slot_dict in self.automat_content.items():
+            if slot in self.active_slots:
+                string += 'Slot '+str(slot-self.slot_offset)+': '+str(slot_dict['amount'])+'/'+str(slot_dict['max_amount'])+'\n'
         update.message.reply_text(string)
         self.default_state(bot, update)
-
-
 
     # name
     # INFO:
@@ -423,9 +412,6 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Das Guthaben wird am '+time.strftime('%d.%m, %H', time.localtime(int(self.api_information['next_reset'])))+' Uhr erneuert.\n\nMomentan steht alle '+self.api_information['reset_interval']+' Tage ein Guthaben von '+self.api_information['standard_credits']+' Freigetränk(en) zur Verfügung. Zuletzt wurde das Guthaben am '+time.strftime('%d.%m, %H', time.localtime(int(self.api_information['last_reset'])))+' Uhr erneuert.')
         self.default_state(bot, update)
 
-
-
-
     # name
     # INFO:
     # ARGS:
@@ -439,18 +425,16 @@ class Telegram_Bot(Thread):
             self.default_state(bot, update)
             return ConversationHandler.END
 
-
     # name
     # INFO:
     # ARGS:
     # RETURNS:
     def report_text(self, bot, update):
         update.message.reply_text('Deine Meldung wurde übermittelt!', reply_markup = ReplyKeyboardRemove())
-        bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}'.format(self.get_name(update), update.effective_user.id, update.message.date, update.message.text), disable_notification=True)
+        bot.send_message(chat_id=self.admin_group_id, text='Meldung\n--------------\nvon {}\nID {}\num {}\n\n {}\n\nBeantworten mit \\send {} <TEXT>'.format(self.get_name(update), update.effective_user.id, update.message.date, update.message.text, update.effective_user.id), disable_notification=True)
         self.save_report_in_db(update.message.text, update.effective_user.id)
         self.default_state(bot, update)
         return ConversationHandler.END
-
 
     # name
     # INFO:
@@ -461,13 +445,11 @@ class Telegram_Bot(Thread):
         self.default_state(bot, update)
         return ConversationHandler.END
 
-
     # name
     # INFO:
     # ARGS:
     # RETURNS:
     def credits_entry(self, bot, update):
-        # check if user has associated rfid, if not: present rfid submission dialogue, if yes: print remaining credits based on connectors
         if str(update.effective_user.id) not in self.users_rfid:
             update.message.reply_text('Um dein Guthaben abzurufen muss deine Legi-Identifikationsnummer mit deinem Telegram-Account in Verbindung gebracht werden. Ich werde mir die Legi-Identifikationsnummer merken und künftig direkt mit deinem Guthaben antworten.\n\nBitte sende mir deine Legi-Identifikationsnummer als Nachricht oder breche den Vorgang mit /cancel ab:', reply_markup = ReplyKeyboardRemove())
             return 1
@@ -493,8 +475,6 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def credits_setrfid(self, bot, update):
-        # present rfid submission dialogue, add /cancel info
-        # ensure sanitisation!
         raw_rfid = str(update.message.text)
         if re.compile("[^0-9]").match(raw_rfid) is not None:
             self.logger.info('Entered rfid contained non-numeric characters.')
@@ -511,7 +491,6 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Die Identifikationsnummer wurde erfolgreich gespeichert!')
         return self.credits_entry(bot, update)
 
-
     # name
     # INFO:
     # ARGS:
@@ -520,7 +499,6 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Vorgang abgebrochen.', reply_markup = ReplyKeyboardRemove())
         self.default_state(bot, update)
         return ConversationHandler.END
-
 
     # name
     # INFO:
@@ -537,9 +515,6 @@ class Telegram_Bot(Thread):
     def error(self, bot, update, error):
         self.logger.warning('Update "%s" caused error "%s"', update, error)
 
-
-
-
     # name
     # INFO:
     # ARGS:
@@ -548,7 +523,6 @@ class Telegram_Bot(Thread):
     def amount_entry(self, bot, update):
         update.message.reply_text('Welcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
         return 1
-
 
     # name
     # INFO:
@@ -577,7 +551,6 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Auf welche Menge soll der Slot '+str(slot)+' aktualisiert werden?\nSende \'*\' für die Maximalmenge, also '+str(self.automat_content[slot]['max_amount'])+'.', reply_markup = ReplyKeyboardRemove())
         user_data['slot'] = slot
         return 2
-
 
     # name
     # INFO:
@@ -609,7 +582,6 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Slot '+str(slot)+' erfolgreich auf '+str(amount)+' geändert.\nWelcher Slot soll aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=True))
         return 1
 
-
     # name
     # INFO:
     # ARGS:
@@ -620,8 +592,6 @@ class Telegram_Bot(Thread):
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
-
-
     # name
     # INFO:
     # ARGS:
@@ -630,7 +600,6 @@ class Telegram_Bot(Thread):
     def maxamount_entry(self, bot, update):
         update.message.reply_text('Für welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
         return 1
-
 
     # name
     # INFO:
@@ -654,7 +623,6 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Auf welche Maximalmenge soll der Slot '+str(slot)+' aktualisiert werden?', reply_markup = ReplyKeyboardRemove())
         user_data['slot'] = slot
         return 2
-
 
     # name
     # INFO:
@@ -684,33 +652,29 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Slot '+str(slot)+' erfolgreich auf Maximalmenge '+str(amount)+' geändert.\nFür welchen Slot soll die Maximalmenge aktualisiert werden?', reply_markup = self.slot_keyboard(with_complete=False))
         return 1
 
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # maxamount_cancel
+    # INFO:     Cancels the process of setting the maximum amount for a slot.
+    # ARGS:     /
+    # RETURNS:  /
     @admin_only
     def maxamount_cancel(self, bot, update):
         update.message.reply_text('Vorgang beendet.')
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # ban_entry
+    # INFO:     Introduction to the user banning conversation.
+    # ARGS:     /
+    # RETURNS:  /
     @admin_only
     def ban_entry(self, bot, update):
         update.message.reply_text('Welche Telegram-ID soll gesperrt werden?\nAbbrechen mit \'Abbruch\'.', reply_markup = ReplyKeyboardRemove())
         return 1
 
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # ban_get_id
+    # INFO:     Queries the admin for the Telegram ID to be banned. Will continue to either confirmation if id is valid or re-ask for id if it is invalid.
+    # ARGS:     user_data (array) -> 'id' (str) Telegram ID of the user to be banned.
+    # RETURNS:  /
     @admin_only
     def ban_get_id(self, bot, update, user_data):
         id_to_ban = str(update.message.text)
@@ -728,11 +692,10 @@ class Telegram_Bot(Thread):
         user_data['id'] = id_to_ban
         return 2
 
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # ban_get_confirmation
+    # INFO:     Confirms the process of banning the specified user in user_data with the admin. Ends the conversation.
+    # ARGS:     user_data (array) -> 'id' (str) Telegram ID of the user to be banned.
+    # RETURNS:  /
     @admin_only
     def ban_get_confirmation(self, bot, update, user_data):
         answer = str(update.message.text)
@@ -751,23 +714,20 @@ class Telegram_Bot(Thread):
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # ban_cancel
+    # INFO:     Stops the conversation about banning a user.
+    # ARGS:     /
+    # RETURNS:  /
     @admin_only
     def ban_cancel(self, bot, update):
         update.message.reply_text('Vorgang beendet.')
         self.admin_panel(bot, update)
         return ConversationHandler.END
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # reload_databases
+    # INFO:     Will re-read all database contents and configuration files from file.
+    # ARGS:     /
+    # RETURNS:  /
     @admin_only
     def reload_databases(self, bot, update):
         self.read_cfg()
@@ -775,27 +735,35 @@ class Telegram_Bot(Thread):
         update.message.reply_text('Datenbanken werden neu gelesen.')
         self.admin_panel(bot, update)
 
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # restart_service
+    # INFO:     Restarts the entire program by shutting down the telegram thread, which in turn causes the main thread to end. The system service manager will then restart the service after its timeout.
+    # ARGS:     /
+    # RETURNS:  /
     @admin_only
     def restart_service(self, bot, update):
-        # Program will restart due to system service manager restarting the service after its timeout
         update.message.reply_text('Automat wird neu gestartet. Bitte etwas Geduld.')
         self.admin_panel(bot, update)
         self.logger.warning('Restart was initiated. Will shut down process now.')
         self.shutdown = True
         self.is_running = False
 
+    # answer_report
+    # INFO:     
+    # ARGS:     /
+    # RETURNS:  /
+    @admin_only
+    def answer_report(self, bot, update, args):
+        user_id = args[0]
+        message = " ".join(args[1:])
+        if re.compile("[^0-9]").match(user_id) is not None:
+            update.message.reply_text('Das ist eine ungültige ID.', reply_markup = ReplyKeyboardRemove())
+            return
+        self.tbot_up.bot.send_message(chat_id=user_id, text='Antwort der Admins auf deine Meldung:\n\n'+message)
 
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # update_fillstatus_callback
+    # INFO:     Checks if slot to be changed is valid, then either decrements the amount in that slot by 1 if amount is None, otherwise update slot content to amount both locally in array as well as in database. Handles admin group notifications by comparing the new slot amount to the notification levels specified in the class. 
+    # ARGS:     slot (int) -> chosen slot to update, amount (int) -> amount to set slot to, will decrease amount by 1 if no amount specified
+    # RETURNS:  /
     def update_fillstatus_callback(self, slot, amount = None):
         if slot not in self.automat_content:
             self.logger.error('Received content update for slot '+str(slot)+' which is unknown. Dismissing.')
@@ -819,22 +787,16 @@ class Telegram_Bot(Thread):
         elif old_amount > new_amount:
             relative_fill_level = new_amount/self.automat_content[slot]['max_amount']
             current_notification_level = self.automat_content[slot]['notification_level']
-
             if relative_fill_level <= self.notification_content_levels[current_notification_level]:
                 self.automat_content[slot]['notification_level'] = current_notification_level + 1
                 self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Slot '+str(slot)+' ist nur noch '+str(int(relative_fill_level*100))+'% gefüllt, mit '+str(new_amount)+' von '+str(self.automat_content[slot]['max_amount'])+'.', disable_notification=True)
-
         elif old_amount < new_amount:
             self.automat_content[slot]['notification_level'] = 0
 
-        
-
-
-
-    # name
-    # INFO:
-    # ARGS:
-    # RETURNS:
+    # uppdate_maxfillstatus_callback
+    # INFO:     Checks if slot to be changed is valid, then adjusts maximum amount to maxamount in local array and in database.
+    # ARGS:     slot (int) -> chosen slot to update, maxamount (int) -> maximum amount to set slot to
+    # RETURNS:  /
     def update_maxfillstatus_callback(self, slot, maxamount):
         if slot not in self.automat_content:
             self.logger.error('Received max-content update for slot '+str(slot)+' which is unknown. Dismissing.')
@@ -847,9 +809,6 @@ class Telegram_Bot(Thread):
         self.set_amount_in_db(slot, max_amount = maxamount)
 
 
-# name
-# INFO:
-# ARGS:
-# RETURNS:
+# main executable
 if __name__ == "__main__":
     print('Hi')
