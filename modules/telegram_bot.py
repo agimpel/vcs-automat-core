@@ -39,8 +39,8 @@ class Telegram_Bot(Thread):
     notification_content_levels = [0.25, 0.10, 0.05, 0.00] # at 25%, 10%, 5% and 0%
 
     # define which slots are shown by the telegram bot and define the offset for the shown number (bot will show slot_number - slot_offset)
-    active_slots = [3, 4, 5, 6, 7, 8]
-    slot_offset = 2
+    active_slots = [1, 2, 3, 4, 5, 6]
+    slot_offset = 0
 
     # __init__
     # INFO:     Sets up logging and paths for config and database files, then reads them and starts the thread (using SQLite3)
