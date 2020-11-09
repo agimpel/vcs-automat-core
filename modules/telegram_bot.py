@@ -779,7 +779,7 @@ class Telegram_Bot(Thread):
     # RETURNS:  /
     @admin_only
     def adminadd_entry(self, bot, update, user_data):
-        update.message.reply_text('Bitte sende mir die Telegram-User-ID, dessen Account zum Admin werden soll.\n Diese kannst du auf zwei Weisen herausfinden:\n1) Leite eine Nachricht des neuen Admins an @userinfobot weiter.\n2) Leite mir eine Nachricht des neuen Admins weiter.', reply_markup = ReplyKeyboardRemove())
+        update.message.reply_text('Bitte sende mir die Telegram-User-ID, dessen Account zum Admin werden soll.\n Diese kannst du wie folgt herausfinden:\n1) Leite eine Nachricht des neuen Admins an @userinfobot weiter.\n2) Sende mir die angezeigte ID.', reply_markup = ReplyKeyboardRemove())
         user_data['origin_name'] = self.get_name(update)
         user_data['origin_id'] = update.effective_user.id
         return 1
@@ -790,11 +790,7 @@ class Telegram_Bot(Thread):
     # RETURNS:
     @admin_only
     def adminadd_id(self, bot, update, user_data):
-
-        if update.effective_user.id != user_data['origin_id']:
-            new_id = update.effective_user.id
-        else:
-            new_id = str(update.message.text)
+        new_id = str(update.message.text)
 
         if new_id == 'Beenden':
             return self.adminadd_cancel(bot, update)
