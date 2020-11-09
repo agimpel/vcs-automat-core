@@ -36,7 +36,7 @@ class Telegram_Bot(Thread):
     max_content_per_slot = 50
 
     # at which remaining content levels to notify the admin group (relative to maximal amount). Note: at 0, there is always an automatic notification
-    notification_content_levels = [0.25, 0.10, 0.05, 0.00] # at 25%, 10%, 5% and 0%
+    notification_content_levels = [0.10, 0.00] # at 10% and 0%
 
     # define which slots are shown by the telegram bot and define the offset for the shown number (bot will show slot_number - slot_offset)
     active_slots = [1, 2, 3, 4, 5, 6]
@@ -132,6 +132,17 @@ class Telegram_Bot(Thread):
             fallbacks = [RegexHandler("(Beenden)", self.ban_cancel)]
         )
         self.tbot_dp.add_handler(ban_handler)
+
+        # admin only conversation handler: Add Admin
+        adminadd_handler = ConversationHandler(
+            entry_points = [RegexHandler('(Admin ernennen)', self.adminadd_entry, pass_user_data=True)],
+            states = {
+                1: [MessageHandler(Filters.text, self.adminadd_id, pass_user_data=True)],
+                2: [MessageHandler(Filters.text, self.adminadd_confirm, pass_user_data=True)],
+            },
+            fallbacks = [RegexHandler("(Beenden)", self.adminadd_cancel)]
+        )
+        self.tbot_dp.add_handler(adminadd_handler)
 
         # admin only commands
         self.tbot_dp.add_handler(RegexHandler("(Administratives)", self.admin_panel))
@@ -232,6 +243,21 @@ class Telegram_Bot(Thread):
         db_connector.close()
         return True
 
+    # add_admin_in_db
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    def add_admin_in_db(self, new_id, id_of_admin = 000000):
+        db_connector = sqlite3.connect(self.db_path)
+        db = db_connector.cursor()
+
+        db.execute("INSERT INTO admins (ID, name) VALUES ('"+str(new_id)+"', 'added by "+str(id_of_admin)+"')")
+        db_connector.commit()
+        self.logger.info('Telegram ID '+str(new_id)+ ' was added to admins by '+str(id_of_admin)+' successfully in database.')
+
+        db_connector.close()
+        return True
+
     # name
     # INFO:
     # ARGS:
@@ -305,7 +331,7 @@ class Telegram_Bot(Thread):
     # ARGS:
     # RETURNS:
     def admin_keyboard(self):
-        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Datenbanken aktualisieren'], ['Automat neustarten'], ['Zurück zur Übersicht']]
+        keyboard = [['Füllstand ändern', 'Maximalmengen ändern'], ['User bannen', 'Admin ernennen'], ['Datenbanken aktualisieren', 'Automat neustarten'], ['Zurück zur Übersicht']]
         return ReplyKeyboardMarkup(keyboard)
 
     # name
@@ -746,6 +772,68 @@ class Telegram_Bot(Thread):
         self.logger.warning('Restart was initiated. Will shut down process now.')
         self.shutdown = True
         self.is_running = False
+
+    # add_admin
+    # INFO:     Adds an admin to the database.
+    # ARGS:     /
+    # RETURNS:  /
+    @admin_only
+    def adminadd_entry(self, bot, update, user_data):
+        update.message.reply_text('Bitte sende mir die Telegram-User-ID, dessen Account zum Admin werden soll.\n Diese kannst du auf zwei Weisen herausfinden:\n1) Leite eine Nachricht des neuen Admins an @userinfobot weiter.\n2) Leite mir eine Nachricht des neuen Admins weiter.', reply_markup = ReplyKeyboardRemove())
+        user_data['origin_name'] = self.get_name(update)
+        user_data['origin_id'] = update.effective_user.id
+        return 1
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    @admin_only
+    def adminadd_id(self, bot, update, user_data):
+
+        if update.effective_user.id != user_data['origin_id']:
+            new_id = update.effective_user.id
+        else:
+            new_id = str(update.message.text)
+
+        if new_id == 'Beenden':
+            return self.adminadd_cancel(bot, update)
+        if new_id in self.admin_user_id:
+            update.message.reply_text('Dieser User ist bereits ein Admin.')
+            return self.adminadd_cancel(bot, update)
+        if re.compile("[^0-9]").match(new_id) is not None:
+            update.message.reply_text('Das ist eine ungültige ID.')
+            return self.adminadd_cancel(bot, update)
+
+        user_data['id'] = new_id
+        update.message.reply_text('Bitte bestätigen, dass die Telegram-ID '+str(new_id)+' als Admin hinzugefügt werden soll:', reply_markup = ReplyKeyboardMarkup([['Ja'], ['Abbruch']]))
+        return 2
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    @admin_only
+    def adminadd_confirm(self, bot, update, user_data):
+        confirmation = str(update.message.text)
+        if confirmation == 'Abbruch':
+            return self.adminadd_cancel(bot, update)
+
+        self.admin_user_id.append(user_data['id'])
+        self.add_admin_in_db(user_data['id'], id_of_admin=user_data['origin_id'])
+        self.tbot_up.bot.send_message(chat_id=self.admin_group_id, text='Telegram-ID '+str(user_data['id'])+' wurde von '+str(user_data['origin_id'])+' '+str(user_data['origin_name'])+' als Admin hinzugefügt.')
+        self.admin_panel(bot, update)
+        return ConversationHandler.END
+
+    # name
+    # INFO:
+    # ARGS:
+    # RETURNS:
+    @admin_only
+    def adminadd_cancel(self, bot, update):
+        update.message.reply_text('Vorgang beendet.')
+        self.admin_panel(bot, update)
+        return ConversationHandler.END
 
     # answer_report
     # INFO:     
